@@ -248,15 +248,36 @@ Compiling native C binaries, injecting them via ADB, applying `iptables` rules, 
         androidboot.redroid_dpi=480
     ```
 
-Wait 30 seconds for Android to boot, then connect via ADB:
-```bash
-adb connect localhost:5555
-adb devices
-# You should see: localhost:5555 device
-```
+3.  Wait 30 seconds for Android to boot, then connect via ADB:
+    ```bash
+    adb connect localhost:5555
+    adb devices
+    # You should see: localhost:5555 device
+    ```
+
+#### 🐧 Troubleshooting Common WSL2 Errors
+
+If your Redroid container fails to boot or Docker won't start in WSL, run these mandatory "Fix-it" commands:
+
+*   **Binderfs Error** (`docker: Error... no such device`):
+    ```bash
+    sudo mkdir -p /dev/binderfs
+    sudo mount -t binder binder /dev/binderfs
+    ```
+*   **Docker Network Error** (`iptables` failure):
+    ```bash
+    sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
+    sudo service docker restart
+    ```
+*   **Permission Denied**:
+    ```bash
+    sudo usermod -aG docker $USER
+    # Restart WSL after running this
+    ```
 
 > [!TIP]
 > **What is an ADB Serial?**
+
 > An ADB serial is a unique identifier for your Android device. 
 > - For **Redroid/Docker**, it is usually the network address: `localhost:5555` or an internal IP.
 > - For **Physical Devices**, it is a hardware string like `9889d6444b49` (visible via `adb devices`).
