@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Damru is currently in Alpha. We provide security updates and patches primarily for the latest `main` branch. 
+Damru is currently in Beta. We provide security updates and patches primarily for the latest `main` branch. 
 
 | Version | Supported          |
 | ------- | ------------------ |

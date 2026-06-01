@@ -2,10 +2,11 @@
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
+  <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
 
   [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-  [![Playwright](https://img.shields.io/badge/playwright-1.40%2B-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
+  [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
   [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)]()
   [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svg?style=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
 </div>
@@ -15,31 +16,34 @@
 > **Damru** leverages rooted Android emulators (like Redroid in Docker) via ADB to achieve undetectable automation. Whether you are bypassing modern WAFs (like Cloudflare Turnstile) or scoring 100% on CreepJS, Damru provides an impenetrable disguise.
 
 > [!WARNING]
-> **Project Status: Alpha**
-> This project is currently in an **Alpha** state. While it has been verified as 100% stable and fully functional on the local systems of the developers who built it, it requires further testing across diverse environments and hardware configurations. We welcome feedback and issue reports!
+> **Project Status: Beta**
+> This project is currently in a **Beta** state. While it has been verified as 100% stable and fully functional on the local systems of the developers who built it, it requires further testing across diverse environments and hardware configurations. We welcome feedback and issue reports!
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 
-- [✨ Core Features](#-core-features)
-- [🥊 Why Damru is Better](#-why-damru-is-better-than-the-rest)
-- [📊 Proof of Stealth: Benchmarks](#-proof-of-stealth-benchmark-comparisons)
-- [🧠 Architecture: The 8 Layers of Stealth](#-architecture-the-8-layers-of-zero-js-stealth)
-- [📂 Project Structure](#-project-structure)
-- [🐍 Python API Documentation](docs/PYTHON_API.md)
-- [💾 Download Custom OS Image](#-download-custom-os-image)
-- [🚀 Quickstart Guide](#-first-time-user-deployment-guide-wsl2--linux)
-- [💻 Usage & Examples](#-usage--examples)
-- [📡 Redroid vs MuMu Player](#-platform-recommendation-redroid-vs-mumu)
-- [🧪 Testing](#-testing-your-setup)
-- [🗺️ Roadmap](#️-the-big-plan-roadmap)
-- [❓ FAQ](#-frequently-asked-questions)
-- [⚖️ Legal Disclaimer](#️-mandatory-legal-disclaimer--ethical-use-notice)
+- [Core Features](#core-features)
+- [Why Damru is Better](#why-damru-is-better-than-the-rest)
+- [Proof of Stealth: Benchmarks](#proof-of-stealth-benchmark-comparisons)
+- [Architecture: The 8 Layers of Stealth](#architecture-the-8-layers-of-zero-js-stealth)
+- [Project Structure](#project-structure)
+- [Python API Documentation](docs/PYTHON_API.md)
+- [Device Profiles](docs/DEVICE_PROFILES.md)
+- [Viewer, Screenshots, and Video](docs/VIEWER.md)
+- [WSL2 Kernel Requirements](docs/WSL_KERNEL.md)
+- [Download Custom OS Image](#download-custom-os-image)
+- [Quickstart Guide](#first-time-user-deployment-guide-wsl2--linux)
+- [Usage & Examples](#usage--examples)
+- [Redroid vs MuMu Player](#platform-recommendation-redroid-vs-mumu)
+- [Testing](#testing-your-setup)
+- [Roadmap](#the-big-plan-roadmap)
+- [FAQ](#frequently-asked-questions)
+- [Legal Disclaimer](#mandatory-legal-disclaimer--ethical-use-notice)
 
 ---
 
-## 📡 Platform Recommendation: Redroid vs MuMu
+## Platform Recommendation: Redroid vs MuMu
 
 While Damru technically lists multiple environments, **Redroid (Docker)** is the only officially supported and functional path.
 
@@ -54,28 +58,30 @@ While Damru technically lists multiple environments, **Redroid (Docker)** is the
 > Damru is designed strictly for containerized environments (Redroid). **It does not support physical Android devices.** Do not attempt to run Damru against your personal phone. If you choose to use a spare rooted device, you do so at your own risk. Damru's low-level OS patches and binary injections may brick or destabilize physical hardware.
 
 **Why Redroid?**
-Damru's most advanced stealth layers—including native GPU binary patching and OS-level `iptables` hooks—are optimized for the Redroid kernel. It provides a more stable environment for multi-container pools and is significantly more undetectable by modern anti-bot heuristics. MuMu Player support is currently an experimental, unfinished, and non-functional beta feature.
+Damru's most advanced stealth layers - including native GPU binary patching and OS-level `iptables` hooks-are optimized for the Redroid kernel. It provides a more stable environment for multi-container pools and is significantly more undetectable by modern anti-bot heuristics. MuMu Player support is currently an experimental, unfinished, and non-functional beta feature.
 
 ---
 
-## ✨ Core Features
+## Core Features
 
-*   🚫 **Zero JS Injection**: All spoofing is executed at the OS, Binary, and CDP levels. No brittle `Object.defineProperty` hacks.
-*   📱 **Massive Device Database**: Built-in profiles for 32+ real Android devices (Samsung, Pixel, Xiaomi, etc.) with perfect hardware specifications.
-*   📐 **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
-*   🧪 **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
-*   🐋 **Auto Image Management**: Automatically pulls and tags the required Redroid Docker images if the custom baked image is missing.
-*   🎭 **Font & Voice Randomization**: Installs custom TTS engines and extra system fonts, randomizing them per session.
-*   🔋 **Hardware Status Spoofing**: Fakes battery levels, charging status, and even audio sample rates (48kHz) to mirror real mobile hardware behavior.
-*   ⚙️ **Hardware Overrides**: Spoofs CPU cores, RAM (via syscall hooks), and touch points (e.g., 5-point touch) directly via native OS patching and CDP.
-*   📶 **Network & DNS Stealth**: Faithfully fakes mobile network conditions and forces resolution through proxy-level ISP DNS to pass "DNS Leak" and "Targeted DNS" checks.
-*   🎯 **CDN & Anti-Bot Bypass**: Out-of-the-box native bypass for modern WAFs (like Cloudflare Turnstile, CDN TLS) and advanced behavioral detection systems.
+*   **Zero JS Injection**: All spoofing is executed at the OS, Binary, and CDP levels. No brittle `Object.defineProperty` hacks.
+*   **Massive Device Database**: Built-in profiles for 49 real Android devices (Samsung, Pixel, Xiaomi, OnePlus, Nothing, Honor, Vivo, POCO, etc.) with realistic hardware specifications.
+*    **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
+*    **Browser Version & Client Hints Randomization**: Dynamically selects from a database of verified Chrome versions and generates perfectly accurate `sec-ch-ua` Client Hints, including Chromium GREASE brand permutations.
+*    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
+
+*   **Auto Image Management**: Automatically pulls and tags the required Redroid Docker images if the custom baked image is missing.
+*   **Font & Voice Randomization**: Installs custom TTS engines and extra system fonts, randomizing them per session.
+*   **Hardware Status Spoofing**: Fakes battery levels, charging status, and even audio sample rates (48kHz) to mirror real mobile hardware behavior.
+*   **Hardware Overrides**: Spoofs CPU cores, RAM (via syscall hooks), and touch points (e.g., 5-point touch) directly via native OS patching and CDP.
+*   **Network & DNS Stealth**: Faithfully fakes mobile network conditions and forces resolution through proxy-level ISP DNS to pass "DNS Leak" and "Targeted DNS" checks.
+*   **CDN & Anti-Bot Bypass**: Out-of-the-box native bypass for modern WAFs (like Cloudflare Turnstile, CDN TLS) and advanced behavioral detection systems.
 
 ---
 
-## 🥊 Why Damru is Better Than the Rest
+## Why Damru is Better Than the Rest
 
-We spent significant time modifying and testing popular desktop-first solutions like **Camoufox**, **Fingerprinting Chromium**, and various Playwright stealth patches to work on mobile—but nothing reached the level of stability and undetectability achieved by this project. 
+We spent significant time modifying and testing popular desktop-first solutions like **Camoufox**, **Fingerprinting Chromium**, and various Playwright stealth patches to work on mobile - but nothing reached the level of stability and undetectability achieved by this project. 
 
 The botting landscape is littered with tools that *used* to work: `puppeteer-stealth`, `undetected-chromedriver`, and various anti-detect browsers. Here is why they fail today, and why Damru succeeds:
 
@@ -92,9 +98,9 @@ The botting landscape is littered with tools that *used* to work: `puppeteer-ste
 | **Network Identity** | Frequently leaks WebRTC private IPs and IPv6 fingerprints. | **OS-Level IP Tables**. Blocks WebRTC leaks and IPv6 at the Android kernel level. |
 | **Mobile Emulation** | Desktop Chrome pretending to be mobile via viewport scaling. | **Real Android OS**. Runs inside Redroid (Android 14) or MuMu Player. It *is* mobile. |
 
-### 📊 Proof of Stealth: Benchmark Comparisons
+### Proof of Stealth: Benchmark Comparisons
 
-We regularly test Damru against the hardest anti-bot systems in the industry. These results are reproducible using the built-in benchmark suite (`python -m damru.benchmark`) or the comprehensive functional test suite (`python example.py`).
+We regularly test Damru against the hardest anti-bot systems in the industry. These results are reproducible using the built-in benchmark suite (`python -m damru benchmark`) or the comprehensive functional test suite (`python example.py`).
 
 | Target Anti-Bot | Standard Playwright | Typical Stealth Plugins | Damru |
 | :--- | :--- | :--- | :--- |
@@ -108,7 +114,7 @@ We regularly test Damru against the hardest anti-bot systems in the industry. Th
 
 ---
 
-## 🧠 Architecture: The 8 Layers of "Zero JS" Stealth
+## Architecture: The 8 Layers of "Zero JS" Stealth
 
 Damru's core philosophy is **Zero JavaScript Injection**. Instead of trying to outsmart anti-bot JavaScript *with* more JavaScript, Damru lies from the outside in.
 
@@ -131,41 +137,45 @@ Damru's core philosophy is **Zero JavaScript Injection**. Instead of trying to o
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 Damru is organized into specialized modules to maintain the separation between high-level Python automation and low-level system spoofing.
 
 ```text
 damru-project/
-├── damru/                 # 🐍 Core Framework (Python)
-│   ├── async_core.py      # Async entry points (AsyncDamru)
-│   ├── core.py            # Sync entry points (Damru)
-│   ├── root.py            # OS/Binary patching logic (resetprop/iptables/display)
-│   ├── devices.py         # 32+ Real Device Specifications Database
-│   ├── chrome.py          # Browser lifecycle & Preferences patching
-│   ├── bypass.py          # CDN TLS/WAF edge-layer TLS impersonation
-│   └── pool.py            # Multi-container orchestration (DamruPool)
-├── native/                # ⚙️ Native Binary Hooks (C source)
-│   ├── vulkan_layer.c     # Vulkan C++ string spoofing binary
-│   └── libfakemem.c       # Physical RAM spoofing via sysconf hooks
-├── tests/                 # 🧪 Stealth & Stability Benchmarks
-│   ├── benchmark_auto.py  # Automated Anti-Bot probe
-│   └── test_stealth.py    # Unit tests for fingerprinting integrity
-├── chrome-apks/           # 📦 Pre-validated Mobile Assets
-│   ├── espeak.apk         # TTS engines for Voice fingerprinting
-│   └── 145.x/             # Specific Chrome/WebView versions
-├── docs/                  # 📄 Roadmaps & Infrastructure Plans
-├── scripts/               # 🛠️ Maintenance & Image Baking Utils
-└── tools/                 # 🧰 External Debugging Tools (Magisk.apk)
++-- damru/                 # Core Framework (Python)
+|   +-- async_core.py      # Async entry points (AsyncDamru)
+|   +-- core.py            # Sync entry points (Damru)
+|   +-- root.py            # OS/Binary patching logic (resetprop/iptables/display)
+|   +-- devices.py         # 49 Real Device Specifications Database
+|   +-- chrome.py          # Browser lifecycle & Preferences patching
+|   +-- bypass.py          # CDN TLS/WAF edge-layer TLS impersonation
+|   +-- pool.py            # Multi-container orchestration (DamruPool)
++-- native/                # Native Binary Hooks (C source)
+|   +-- vulkan_layer.c     # Vulkan C++ string spoofing binary
+|   +-- libfakemem.c       # Physical RAM spoofing via sysconf hooks
++-- tests/                 # Stealth & Stability Benchmarks
+|   +-- benchmark_auto.py  # Automated Anti-Bot probe
+|   +-- test_stealth.py    # Unit tests for fingerprinting integrity
++-- chrome-apks/           # Pre-validated Mobile Assets
+|   +-- espeak.apk         # TTS engines for Voice fingerprinting
+|   +-- 145.x/             # Specific Chrome/WebView versions
++-- docs/                  # Roadmaps & Infrastructure Plans
++-- scripts/               # Maintenance & Image Baking Utils
++-- tools/                 # External Debugging Tools (Magisk.apk)
 ```
 
 ---
 
-## 🐍 Python API Documentation
+## Python API Documentation
 
 For detailed information on how to use the Damru library programmatically, including class references, managed pooling, and advanced configuration, please see the:
 
-👉 **[Damru Python API Reference](docs/PYTHON_API.md)**
+**[Damru Python API Reference](docs/PYTHON_API.md)**
+
+For the full list of available Android identities, see the:
+
+**[Damru Device Profile Reference](docs/DEVICE_PROFILES.md)**
 
 ### Quick Summary:
 *   **`AsyncDamru`**: The primary entry point for asynchronous automation.
@@ -175,21 +185,24 @@ For detailed information on how to use the Damru library programmatically, inclu
 
 ---
 
-## 💾 Download Custom OS Image
+## Download Custom OS Image
 
 > [!IMPORTANT]
 > The pre-baked Damru OS image is **2.3 GB**. Due to its size, it is hosted externally on Google Drive.
 
 **Download the latest image here:**
-👉 **[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1na6YYHbpvDlaXhicg_nAKiaMFaYRN99U/view?usp=sharing)**
+ **[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1na6YYHbpvDlaXhicg_nAKiaMFaYRN99U/view?usp=sharing)**
 
 Once downloaded, follow **Step 3** in the Deployment Guide below to load it into Docker.
 
 ---
 
-## 🚀 First-Time User Deployment Guide (WSL2 / Linux)
+## First-Time User Deployment Guide (WSL2 / Linux)
 
 Ready to start? Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices instantly. Follow this step-by-step guide to deploy Damru from scratch on Ubuntu/Debian or WSL2 (Windows Subsystem for Linux).
+
+> [!IMPORTANT]
+> Redroid is Linux-only. On Windows, Docker and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
 
 ### Step 1: System Preparation (Linux / WSL2)
 
@@ -199,6 +212,15 @@ You need a Linux environment. If you are on Windows, install WSL2 (Ubuntu). Ensu
 sudo apt update && sudo apt upgrade -y
 sudo apt install adb wget curl git jq -y
 ```
+
+After Damru is installed, you can also let the CLI install the common Linux/WSL dependencies:
+
+```bash
+python -m damru install-deps
+python -m damru check-env
+```
+
+`install-deps` is idempotent: on a fresh WSL/Linux install it installs ADB, Docker, iptables, curl/wget/git/jq, mounts binderfs, and starts Docker. On later runs it reuses installed packages and rehydrates Docker/binderfs after WSL restarts.
 
 ### Step 2: Install Docker & Enable Binderfs (Crucial for Redroid)
 
@@ -219,7 +241,7 @@ Redroid requires Docker and Android's `binderfs` kernel modules.
     ```
     *(Note: To make this persistent across reboots, you will need to add it to `/etc/fstab`).*
 
-### 🪄 The Instant Custom OS Image
+### The Instant Custom OS Image
 
 Compiling native C binaries, injecting them via ADB, applying `iptables` rules, and installing Chrome on every run is a long process. **The Instant Solution:** We provide a pre-baked OS image ([damru-redroid-latest.tar](https://drive.google.com/file/d/1na6YYHbpvDlaXhicg_nAKiaMFaYRN99U/view?usp=sharing)) where all native patches, TTS engines, and specific Chrome APKs are **already baked in**. This turns a complex 5-minute setup into an instant plug-and-play boot!
 
@@ -255,7 +277,7 @@ Compiling native C binaries, injecting them via ADB, applying `iptables` rules, 
     # You should see: localhost:5555 device
     ```
 
-#### 🐧 Troubleshooting Common WSL2 Errors
+#### Troubleshooting Common WSL2 Errors
 
 If your Redroid container fails to boot or Docker won't start in WSL, run these mandatory "Fix-it" commands:
 
@@ -266,9 +288,14 @@ If your Redroid container fails to boot or Docker won't start in WSL, run these 
     ```
 *   **Docker Network Error** (`iptables` failure):
     ```bash
-    sudo update-alternatives --set iptables /usr/sbin/iptables-legacy
+    sudo update-alternatives --set iptables /usr/sbin/iptables-nft
     sudo service docker restart
     ```
+*   **Missing WSL Kernel Module** (`xt_addrtype not found`):
+    ```bash
+    python -m damru fix-wsl
+    ```
+    If the module is still missing, boot a WSL2 kernel with Docker bridge/NAT and binderfs support. Damru cannot create missing kernel features from Python.
 *   **Permission Denied**:
     ```bash
     sudo usermod -aG docker $USER
@@ -290,7 +317,28 @@ pip install git+https://github.com/akwin1234/damru.git
 playwright install
 ```
 
-#### 🛠️ Windows Installation Fix (Important)
+Verify the local environment:
+
+```bash
+python -m damru setup
+python -m damru check-env
+```
+
+If Docker still fails inside WSL, run the safe repair/diagnostic pass:
+
+```bash
+python -m damru fix-wsl
+```
+
+If it reports a missing kernel module such as `xt_addrtype`, the active WSL2 kernel lacks Docker bridge/NAT support. See [WSL2 Kernel Requirements](docs/WSL_KERNEL.md).
+
+For scripted setup with a custom WSL distro/user, pass them explicitly:
+
+```bash
+python -m damru setup -y --wsl-distro Ubuntu --wsl-username your-wsl-user
+```
+
+#### Windows Installation Fix (Important)
 
 If you are using Windows (especially Python 3.10) and encounter an `AssertionError: ...distutils\core.py` during `pip install`, you must force standard distutils. Run this in your terminal *before* installing:
 
@@ -310,13 +358,38 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -e .
 playwright install
+python -m damru setup --skip-deps
 ```
 
 *(Magic Note: When you import Damru, it automatically patches Playwright's source code (`crPage.js`) on your system to prevent CDP target discovery leaks!)*
 
+### CLI Commands
+
+```bash
+python -m damru setup           # guided first-run setup and config writer
+python -m damru check-env       # validate Linux/WSL dependencies and assets
+python -m damru install-deps    # install common Linux/WSL dependencies
+python -m damru fix-wsl         # retry safe WSL Docker/binderfs/netfilter fixes
+python -m damru benchmark       # run the benchmark command
+python -m damru bake-image      # bake a warm Redroid image
+python -m damru devices         # list ADB devices from Linux/WSL
+python -m damru screenshot      # capture Android display PNG through ADB
+python -m damru record          # capture Android display MP4 through ADB
+python -m damru view            # open optional scrcpy live viewer
+python -m damru install-viewer  # check/install optional scrcpy tooling
+```
+
+On Windows, `install-deps` runs inside WSL as root and does not use native Windows Docker. On native Linux scripted setup where sudo cannot prompt interactively, pass one password line on stdin:
+
+```bash
+printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-password-stdin
+```
+
+For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
+
 ---
 
-## ⚙️ Global Configuration
+## Global Configuration
 
 Damru uses a centralized configuration file located at `damru/config.py`. If you clone the repository or install it locally, you should modify these settings before running large pools or automated scripts.
 
@@ -326,16 +399,18 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
 > - **Windows / WSL2**: Copy `damru/config.py.windows` and rename it to `config.py`.
 > - **Native Linux**: Copy `damru/config.py.linux` and rename it to `config.py`.
 
-### 🔑 Essential Configurations
+### Essential Configurations
 
-1. **WSL2 Sudo Authentication (Windows Auto-Mode)**:
-   If you are running Python on Windows and orchestrating Docker containers inside WSL2, Damru needs to execute `sudo docker` commands automatically.
+1. **WSL2 Settings (Windows Auto-Mode)**:
+   If you are running Python on Windows, Docker and Redroid still run inside WSL2. Damru uses `wsl -u root` for Linux setup and Docker preparation, so a WSL sudo password is not required for the CLI setup path.
    ```python
    # damru/config.py
    WSL_DISTRO = "Ubuntu"
-   WSL_USERNAME = "YOUR_WSL_USERNAME_HERE"
-   WSL_PASSWORD = "YOUR_WSL_PASSWORD_HERE"  # Required to bypass sudo prompts
+   WSL_USERNAME = "your-wsl-user"
+   WSL_PASSWORD = ""  # Kept for compatibility; current WSL setup uses wsl -u root
    ```
+
+   Existing WSL installs are covered by `damru setup`: set `WSL_DISTRO` and `WSL_USERNAME`, then run `python -m damru check-env`. Damru's current Windows setup/runtime path uses `wsl -u root` for privileged WSL commands, so it does not need to store a sudo password in `config.py`.
 
 2. **Chrome APK Path**:
    When not using the pre-baked `.tar` image, Damru will dynamically install Chrome onto raw Redroid instances. Point it to your APK directory.
@@ -353,7 +428,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    REDROID_IMAGE = "damru-redroid:latest"  # The Docker image to use
    ```
 
-### 🐋 Docker Storage Location (Crucial for Windows Users)
+### Docker Storage Location (Crucial for Windows Users)
 Redroid containers consume significant disk space. If you are using WSL2 Docker, it saves data to your `ext4.vhdx` virtual drive on the `C:` drive by default, which can quickly fill up your primary SSD.
 
 **To save Docker images to a secondary HDD:**
@@ -368,9 +443,9 @@ You must configure the Docker daemon inside WSL to use a different data-root.
 
 ---
 
-## 💻 Usage & Examples
+## Usage & Examples
 
-Damru handles the heavy lifting: it connects to ADB, gains root, applies system patches, spoofs the GPU, launches Chrome, and attaches via CDP—all automatically.
+Damru handles the heavy lifting: it connects to ADB, gains root, applies system patches, spoofs the GPU, launches Chrome, and attaches via CDP-all automatically.
 
 ### Example 1: Basic Async Usage (The Standard Way)
 
@@ -381,7 +456,7 @@ from damru import AsyncDamru
 async def main():
     print("Launching Damru...")
     
-    # device="random" picks from our database of 32+ real Android devices.
+    # device="random" picks from our database of 49 real Android devices.
     # proxy is used to auto-resolve Timezone and Locale!
     async with AsyncDamru(
         device="random", 
@@ -442,32 +517,33 @@ with DamruPoolSync(size=3, proxy_list=proxies) as pool:
 
 ---
 
-## 🧪 Testing Your Setup
+## Testing Your Setup
 
 Damru ships with a comprehensive benchmark suite. Run it to ensure your setup is truly undetectable.
 
 ```bash
 # Run all benchmark tests on a random device
-python -m damru.benchmark --device random
+python -m damru benchmark --device random
 
 # Run specific tests with a proxy
-python -m damru.benchmark --device samsung_galaxy_s24_ultra --proxy socks5://ip:port --tests creepjs cloudflare
+python -m damru benchmark --device samsung_galaxy_s24_ultra --proxy socks5://ip:port --tests creepjs cloudflare
 ```
 
 ---
 
-## 🗺️ The "Big Plan" (Roadmap)
+## The "Big Plan" (Roadmap)
 
 We are aggressively building Damru into a fully autonomous infrastructure tool. Check `docs/AUTOMATION_GAPS_PLAN.md` for details.
 
-*   [ ] **`damru setup` CLI**: Single-command installation for Docker and `binderfs`.
-*   [ ] **Auto Image Management**: Damru will dynamically bake "Damru-Ready" Docker images natively.
-*   [ ] **Automated Health Checks**: One-click verification of ADB, kernel config, and Playwright patches.
-*   [ ] **Mass Orchestration**: Expanding `DamruPool` for Kubernetes/Swarm deployment.
+*   [x] **`damru setup` CLI**: Single-command configuration plus Linux/WSL dependency setup.
+*   [x] **Automated Health Checks**: Verification of ADB, Docker, binderfs, Chrome APKs, and Playwright patches.
+*   [x] **Manual Viewer Tools**: Optional screenshots, video recording, and scrcpy live viewer.
+*   [] **Auto Image Management**: Damru will dynamically bake "Damru-Ready" Docker images natively.
+*   [] **Mass Orchestration**: Expanding `DamruPool` for Kubernetes/Swarm deployment.
 
 ---
 
-## ❓ Frequently Asked Questions
+## Frequently Asked Questions
 
 ### 1. Does Damru support physical Android devices?
 **No.** Damru is designed strictly for containerized environments (Redroid). Its low-level OS patches, `resetprop` logic, and binary driver injections are optimized for Redroid's kernel and filesystem. **Do not attempt to use Damru on your personal phone.** If you use a spare rooted device, you do so entirely at your own risk.
@@ -488,9 +564,8 @@ Standard stealth tools are caught by anti-bots because their JavaScript injectio
 
 ## 🙏 Acknowledgments & Credits
 
-Damru is a **vibe-coded** project, built with a focus on rapid experimentation and deep technical intuition. We would like to credit the following projects, technologies, and AI co-pilots that made this framework possible:
+Damru is built on the shoulders of giants. We would like to credit the following projects and technologies that make this framework possible:
 
-*   **AI Co-Pilots**: Massive thanks to **OpenAI Codex**, **Claude Code**, and **Kimi CLI** for their instrumental assistance in research, C++ binary patching, and complex architectural orchestration.
 *   **[redroid](https://github.com/remote-android/redroid-doc)**: The core GPU-accelerated Android-in-Container solution that provides our high-performance mobile environment.
 *   **[Playwright](https://playwright.dev/)**: The incredible browser automation library that serves as our high-level API.
 *   **[Chromium](https://www.chromium.org/Home)**: The world-class browser engine we patch and automate.
@@ -502,14 +577,14 @@ Damru is a **vibe-coded** project, built with a focus on rapid experimentation a
 
 ---
 
-## ⚖️ Mandatory Legal Disclaimer & Ethical Use Notice
+## Mandatory Legal Disclaimer & Ethical Use Notice
 
 **IMPORTANT: READ CAREFULLY BEFORE PROCEEDING**
 
 Damru (the "Software") is developed and distributed strictly for **educational purposes, ethical security research, and authorized academic study**. By using this Software, you acknowledge and agree to the following terms:
 
 ### 1. Educational and Research Intent
-Any examples provided within this repository—including but not limited to the bypassing of **Cloudflare, CreepJS, or BrowserScan**—are presented solely as theoretical demonstrations of browser fingerprinting vulnerabilities. These "bypasses" are intended for use against systems you own or have explicit, written permission to test. They are designed to help security professionals and developers understand how to improve their own defensive measures.
+Any examples provided within this repository-including but not limited to the bypassing of **Cloudflare, CreepJS, or BrowserScan**-are presented solely as theoretical demonstrations of browser fingerprinting vulnerabilities. These "bypasses" are intended for use against systems you own or have explicit, written permission to test. They are designed to help security professionals and developers understand how to improve their own defensive measures.
 
 ### 2. No Warranty and Limitation of Liability
 The Software is provided **"AS IS"**, without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and non-infringement. In no event shall the authors, contributors, or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the Software or the use or other dealings in the Software.
@@ -525,7 +600,3 @@ Using automation frameworks against high-security systems carries inherent risks
 
 ### 5. Commercial and Business Use Restriction
 In accordance with the **PolyForm Noncommercial License 1.0.0**, all commercial and business use of this Software is strictly prohibited. This includes, but is not limited to, use by for-profit entities, use in support of commercial services, or any activity directed toward monetary compensation. The Software is licensed exclusively for personal, educational, and non-commercial research purposes.
-
----
-
-> **Note:** This is a vibe-coded but fully working project. Hahaha! ?? I am not a highly experienced dev.
