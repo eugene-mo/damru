@@ -393,11 +393,16 @@ If your Redroid container fails to boot or Docker won't start in WSL, run these 
 
 ### Step 4: Install Damru
 
-**Option A: Direct Pip Install (Fastest)**
+**Option A: Pip Install in a Virtual Environment (Fastest)**
 ```bash
+sudo apt install -y python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip setuptools wheel
 pip install git+https://github.com/akwin1234/damru.git
-playwright install
 ```
+
+Do not install Damru into the system Python on modern Ubuntu. Ubuntu uses PEP 668 externally-managed Python environments, so use a virtual environment. Damru connects to Chrome inside Android/Redroid through CDP, so `playwright install chromium` is not required for normal Damru sessions and may fail on brand-new Ubuntu releases before Playwright officially supports that OS label.
 
 Verify the local environment:
 
@@ -437,8 +442,8 @@ git clone https://github.com/akwin1234/damru.git
 cd damru
 python3 -m venv venv
 source venv/bin/activate
+python -m pip install -U pip setuptools wheel
 pip install -e .
-playwright install
 python -m damru setup --skip-deps
 ```
 
