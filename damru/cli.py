@@ -1102,6 +1102,11 @@ def _install_deps(args: argparse.Namespace) -> int:
     ]
     if _is_windows():
         display_commands = [c.replace("sudo ", "") for c in display_commands]
+    else:
+        display_commands.insert(
+            2,
+            "sudo apt-get install -y linux-modules-extra-$(uname -r)  # native Ubuntu when available",
+        )
 
     print(f"Damru will install Linux dependencies{distro_note}. Docker is never installed in native Windows.")
     for command in display_commands:
@@ -1148,6 +1153,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "sudo_cmd(){ printf '%s\\n' \"$DAMRU_SUDO_PASSWORD\" | sudo -S \"$@\"; }",
             "sudo_cmd apt-get update -y",
             "sudo_cmd apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
+            "if apt-cache show \"linux-modules-extra-$(uname -r)\" >/dev/null 2>&1; then sudo_cmd apt-get install -y \"linux-modules-extra-$(uname -r)\"; fi",
             "if [ -n \"${USER:-}\" ]; then sudo_cmd usermod -aG docker \"$USER\" 2>/dev/null || true; fi",
             *sudo_cmd_backend_lines,
             *_restart_docker_lines("sudo_cmd"),
@@ -1180,6 +1186,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             "set -e",
             "sudo apt-get update -y",
             "sudo apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
+            "if apt-cache show \"linux-modules-extra-$(uname -r)\" >/dev/null 2>&1; then sudo apt-get install -y \"linux-modules-extra-$(uname -r)\"; fi",
             "if [ -n \"${USER:-}\" ]; then sudo usermod -aG docker \"$USER\" 2>/dev/null || true; fi",
             *sudo_backend_lines,
             *_restart_docker_lines("sudo"),
