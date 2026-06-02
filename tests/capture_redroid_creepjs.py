@@ -1,4 +1,4 @@
-"""Capture full CreepJS report from redroid via AsyncDamru pipeline (same as real phone capture)."""
+﻿"""Capture full CreepJS report from redroid via AsyncDamru pipeline (same as real phone capture)."""
 import asyncio
 import sys
 import os
@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 from damru.utils import setup_logging, sleep
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def goto_retry(page, url, retries=8, timeout=60000):
@@ -29,7 +29,7 @@ async def goto_retry(page, url, retries=8, timeout=60000):
 async def main():
     setup_logging(debug=False)
     print("=" * 60)
-    print("  CreepJS Full Capture — Redroid (AsyncDamru Pipeline)")
+    print("  CreepJS Full Capture â€” Redroid (AsyncDamru Pipeline)")
     print("=" * 60)
 
     async with AsyncDamru(
@@ -81,9 +81,9 @@ async def main():
 
         # Build markdown
         md = []
-        md.append("# CreepJS Report — Redroid (AsyncDamru Pipeline)")
+        md.append("# CreepJS Report â€” Redroid (AsyncDamru Pipeline)")
         md.append(f"- **Platform**: Redroid 14, x86_64, Docker/WSL2")
-        md.append(f"- **Proxy**: PH HTTP (198.20.189.134:50000)")
+        md.append(f"- **Proxy**: PH HTTP (proxy.example:50000)")
         md.append(f"- **Date**: 2026-02-16")
         md.append(f"- **Pipeline**: Full AsyncDamru (root + CDP + JS)")
         md.append("")

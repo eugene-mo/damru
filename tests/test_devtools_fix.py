@@ -1,4 +1,4 @@
-"""Test fingerprint.com/demo developerTools detection fix."""
+﻿"""Test fingerprint.com/demo developerTools detection fix."""
 import asyncio
 import json
 import sys
@@ -8,13 +8,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from damru import AsyncDamru
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():
     print("=" * 70)
-    print("  fingerprint.com/demo — developerTools fix test")
+    print("  fingerprint.com/demo â€” developerTools fix test")
     print("=" * 70)
 
     async with AsyncDamru(

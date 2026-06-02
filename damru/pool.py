@@ -14,6 +14,7 @@ DamruPoolSync is thread-safe for use with ThreadPoolExecutor.
 from __future__ import annotations
 
 import asyncio
+import sys
 import threading
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
@@ -135,8 +136,9 @@ class DamruPool:
         self._max_failures = config.MAX_SLOT_FAILURES
         self._health_interval = config.HEALTH_CHECK_INTERVAL
         self._task_timeout = config.TASK_TIMEOUT  # None = no limit
-        if self._mode == "mumu" and self._session_timeout < 240:
-            # MuMu first-session setup can be slower than redroid/manual.
+        if self._mode in {"auto", "mumu"} and self._session_timeout < 240:
+            # Emulator/container first-session setup can be slower than manual devices,
+            # especially when multiple Redroid workers cold-start together in WSL.
             self._session_timeout = 240
 
         # Cleanup timeout: max seconds to wait for __aexit__ before abandoning
@@ -219,6 +221,8 @@ class DamruPool:
             sum(s.sessions_served for s in self._slots),
         )
         self._slots.clear()
+        if sys.platform == "win32":
+            await asyncio.sleep(2.0)
 
     # â”€â”€ Manual mode init â”€â”€
 
@@ -265,6 +269,7 @@ class DamruPool:
         self._docker = RedroidManager(wsl_distro=self._wsl_distro)
 
         await self._docker.check_docker()
+        await self._docker.validate_redroid_multi_container_support(count)
 
         # Validate that at least one Chrome APK exists (fail fast)
         apk_path = self._docker.find_chrome_apk(self._chrome_apk)
@@ -303,7 +308,7 @@ class DamruPool:
                         try:
                             if attempt > 0:
                                 await self._docker._run_cmd(
-                                    ["adb", "connect", serial],
+                                    self._docker._adb_cmd("connect", serial),
                                     timeout=10, allow_failure=True,
                                 )
                                 await asyncio.sleep(5)
@@ -470,6 +475,18 @@ class DamruPool:
                         except Exception:
                             logger.warning("Slot %d: cleanup timed out/failed, abandoning", slot.index)
                         damru = None
+                    if (
+                        self._mode == "auto"
+                        and self._docker
+                        and slot.chrome_apk_path
+                        and "No Chrome browser found" in err_text
+                        and attempt < self._max_retries
+                    ):
+                        logger.info("Slot %d: Chrome missing after failed setup, reinstalling before retry", slot.index)
+                        try:
+                            await self._docker.install_chrome(slot.serial, slot.chrome_apk_path)
+                        except Exception as install_exc:
+                            logger.warning("Slot %d: Chrome reinstall failed: %s", slot.index, install_exc)
                     if attempt == self._max_retries:
                         slot.consecutive_failures += 1
                         slot.last_error = err_text
@@ -611,14 +628,15 @@ class DamruPool:
 
         try:
             if self._mode == "auto":
-                from .config import REDROID_BASE_PORT
-                await self._docker.restart_container(slot.container_index)
-                await self._docker._get_adb_host()
-                serial = self._docker._make_serial(REDROID_BASE_PORT + slot.container_index)
+                serial = await self._docker.restart_container(slot.container_index)
                 adb = ADB()
                 await adb._run(["connect", serial], timeout=10, allow_failure=True)
-                from .config import CONTAINER_BOOT_TIMEOUT
-                await self._docker._wait_for_boot(serial, timeout=CONTAINER_BOOT_TIMEOUT)
+                from .config import CONTAINER_BOOT_TIMEOUT, REDROID_CONTAINER_PREFIX
+                await self._docker._wait_for_boot(
+                    serial,
+                    name=f"{REDROID_CONTAINER_PREFIX}{slot.container_index}",
+                    timeout=CONTAINER_BOOT_TIMEOUT,
+                )
                 apk = slot.chrome_apk_path or self._chrome_apk_path
                 if apk:
                     await self._docker.install_chrome(serial, apk)

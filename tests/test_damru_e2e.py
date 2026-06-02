@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Quick E2E test of damru core flow on a running redroid container.
 
 Tests: ADB connect, root, GPU binary spoof, Chrome launch, FRE dismiss,
@@ -18,7 +18,6 @@ from damru.chrome import ChromeManager
 from damru.cdp import CDPConnection
 from damru.devices import get_device, get_random_device, pick_random_android_version, pick_random_chrome_version
 from damru.profiles import build_profile
-from damru.injection import build_hardware_override_script
 from damru.proxy import build_accept_language
 from damru.utils import setup_logging, logger
 
@@ -69,7 +68,7 @@ async def main():
     print(f"[6] Chrome: {chrome.package} v{version}")
 
     if not version:
-        print("    Chrome not installed — skipping launch test")
+        print("    Chrome not installed â€” skipping launch test")
         return
 
     # 6b. Set system HTTP proxy BEFORE Chrome launch (so all traffic routes through it)
@@ -94,7 +93,7 @@ async def main():
     print(f"[9] Devtools socket: {socket_ok}")
 
     if not socket_ok:
-        print("    No devtools socket — cannot connect CDP")
+        print("    No devtools socket â€” cannot connect CDP")
         await chrome.force_stop()
         return
 
@@ -209,11 +208,11 @@ async def main():
         except Exception as e:
             print(f"    Client Hints: {e}")
 
-    # 12. IP / WebRTC leak tests (requires proxy — already set at step 6b)
+    # 12. IP / WebRTC leak tests (requires proxy â€” already set at step 6b)
     if proxy and page:
         print(f"\n[12] IP Leak Tests (proxy={proxy})")
 
-        # ipleak.net — check visible IP + WebRTC
+        # ipleak.net â€” check visible IP + WebRTC
         try:
             await page.goto("https://ipleak.net/", wait_until="load", timeout=30000)
             await asyncio.sleep(8)  # Wait for JS-rendered content
@@ -252,7 +251,7 @@ async def main():
         except Exception as e:
             print(f"    ipleak.net: error - {e}")
 
-        # whoer.net — overall anonymity score
+        # whoer.net â€” overall anonymity score
         try:
             await page.goto("https://whoer.net/", wait_until="domcontentloaded", timeout=60000)
             await asyncio.sleep(15)  # whoer.net is heavy JS, needs time
@@ -275,7 +274,7 @@ async def main():
         # Clear proxy
         await adb.shell("settings put global http_proxy :0", allow_failure=True)
     elif not proxy:
-        print("\n[12] Skipping IP leak tests (pass proxy as 2nd arg, e.g. 198.20.189.134:50000)")
+        print("\n[12] Skipping IP leak tests (pass proxy as 2nd arg, e.g. proxy.example:50000)")
 
     # Cleanup
     await cdp.disconnect()

@@ -1,10 +1,10 @@
-"""Test todetect.net and fingerprint.com in parallel using 2 separate containers."""
+﻿"""Test todetect.net and fingerprint.com in parallel using 2 separate containers."""
 import asyncio, json, sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "parallel_sites")
 
 async def test_todetect():
@@ -136,9 +136,9 @@ async def main():
     print("RESULTS:")
     for r in results:
         if isinstance(r, Exception):
-            print(f"  ❌ Error: {r}")
+            print(f"  âŒ Error: {r}")
         else:
-            print(f"  ✅ {r['site']}: {r['time']:.1f}s")
+            print(f"  âœ… {r['site']}: {r['time']:.1f}s")
     print("=" * 60)
 
 if __name__ == "__main__":

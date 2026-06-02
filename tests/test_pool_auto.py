@@ -1,4 +1,4 @@
-"""Test DamruPool auto mode — redroid container with unique fingerprints."""
+﻿"""Test DamruPool auto mode â€” redroid container with unique fingerprints."""
 import asyncio
 import sys
 import os
@@ -6,8 +6,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import DamruPool
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def get_fingerprint(ctx):
@@ -53,7 +53,7 @@ async def main():
             print(f"  platform={hw['platform']}")
             print(f"  screen={hw['screenW']}x{hw['screenH']}")
 
-        # Session 2 — should get a different random device
+        # Session 2 â€” should get a different random device
         print("\n--- Session 2 ---")
         async with pool.session() as ctx:
             hw = await get_fingerprint(ctx)

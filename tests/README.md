@@ -1,41 +1,28 @@
-# 🧪 Test Suite & Benchmarks (`tests/`)
+# Test Suite
 
-Welcome to the Damru proving grounds. This directory contains our extensive testing framework. 
+Damru has two kinds of tests:
 
-> **These tests are not just for code correctness—they are active probes against the world's most aggressive anti-bot and fingerprinting services.**
+- Fast unit tests that do not need Android, Docker, Redroid, ADB, GPU access, or live websites.
+- Environment probes that exercise real WSL/Linux Docker, Redroid, ADB, Chrome, GPU spoofing, fingerprinting sites, and network behavior.
 
----
+Default pytest runs only the fast unit tests and skips environment-heavy probes:
 
-## 📊 Test Categories
-
-Our suite is broken down into specific domains of stealth and reliability:
-
-*   🛡️ **`benchmark_auto.py` / `test_benchmark_sites.py`**: Runs Damru through high-tier bot tests like CreepJS, BrowserScan, Sannysoft, and Cloudflare.
-*   🎮 **`test_gpu_*.py`**: Specifically verifies that the native binary patches (`native/` folder) are successfully spoofing Vulkan/GLES renderers without leaking *SwiftShader* or *Google Swift* properties.
-*   🖥️ **`test_identity.py` / `test_hardware.py`**: Ensures the hardware concurrency (CPU cores), RAM, touch points, and User-Agent are correctly overridden via CDP.
-*   🌐 **`test_ip_leak.py` / `test_webrtc_*.py`**: Verifies that the Android `iptables` rules successfully prevent WebRTC from leaking private/local IPs.
-*   🔄 **`test_e2e.py`**: End-to-End tests verifying the full flow: `Docker container creation -> Profile Assignment -> Proxy Binding -> Stealth Browsing -> Teardown`.
-
----
-
-## 🚀 How to Run
-
-Most tests use `pytest` for streamlined execution and reporting.
-
-**Run the full suite:**
 ```bash
-cd ..
-pytest tests/
+python -m pytest -q
 ```
 
-**Run a specific stealth module (verbose mode):**
+Run the live probes only when the machine has the required Linux/WSL Redroid environment ready:
+
 ```bash
-pytest tests/test_stealth.py -v
+python -m pytest --run-damru-probes -q
 ```
 
-**Run benchmark tests against real anti-bots:**
+Useful focused checks:
+
 ```bash
-python -m tests.benchmark_auto
+python -m pytest tests/test_images_unit.py tests/test_root_webrtc.py -q
+python -m damru check-env --viewer
+python -m damru fix-wsl
 ```
 
-*Note: These tests are crucial for verifying that the "Zero JS Injection" methodology holds up against evolving browser fingerprinting techniques. Always run the suite before submitting PRs!*
+Manual probe scripts can still be run directly with `python tests/<script>.py` when you intentionally want a live browser/device check.

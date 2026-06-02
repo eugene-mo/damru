@@ -1,4 +1,4 @@
-"""Proxy configuration and GeoIP resolution for damru.
+﻿"""Proxy configuration and GeoIP resolution for damru.
 
 Resolves timezone and locale from proxy exit IP to ensure Chrome's
 timezone matches the proxy location (BrowserScan checks this).
@@ -9,15 +9,105 @@ On Android, Chrome on "user" builds ignores command-line flags including
 """
 from __future__ import annotations
 
-from typing import Dict, Optional
-from urllib.parse import urlparse
+import random
+import secrets
+from typing import Dict, List, Optional
+from urllib.parse import quote, unquote, urlparse, urlunparse
 
 from .utils import logger
 
-# GeoIP cache: proxy URL → {timezone, locale, country_code, ip}
+# GeoIP cache: proxy URL -> {timezone, locale, country_code, ip}. Disabled by
+# default for rotating proxies; callers may opt in only for static proxies.
 _geo_cache: Dict[str, Dict[str, str]] = {}
+_sticky_proxy_cache: Dict[str, str] = {}
 
-# Timezone → BCP-47 locale mapping (ported from fingerprint-chromium)
+_COUNTRY_LOCALE_VARIANTS: Dict[str, List[str]] = {
+    # CLDR exceptional reservations / unknown territory fallbacks
+    "AC": ["en-AC"], "CP": ["en-US"], "CQ": ["en-CQ"], "DG": ["en-DG"],
+    "EA": ["es-EA"], "IC": ["es-IC"], "TA": ["en-TA"], "ZZ": ["en-US"],
+    # North America
+    "US": ["en-US"], "CA": ["en-CA", "fr-CA"], "MX": ["es-MX"],
+    "BM": ["en-BM"], "GL": ["kl-GL", "da-GL"], "PM": ["fr-PM"], "UM": ["en-UM"],
+    # Central America / Caribbean
+    "BZ": ["en-BZ", "es-BZ"], "CR": ["es-CR"], "SV": ["es-SV"],
+    "GT": ["es-GT"], "HN": ["es-HN"], "NI": ["es-NI"], "PA": ["es-PA"],
+    "AG": ["en-AG"], "AI": ["en-AI"], "AW": ["nl-AW", "pap-AW"],
+    "BB": ["en-BB"], "BL": ["fr-BL"], "BQ": ["nl-BQ"], "BS": ["en-BS"],
+    "CU": ["es-CU"], "CW": ["nl-CW", "pap-CW"], "DM": ["en-DM"],
+    "DO": ["es-DO"], "GD": ["en-GD"], "GP": ["fr-GP"], "HT": ["ht-HT", "fr-HT"],
+    "JM": ["en-JM"], "KN": ["en-KN"], "KY": ["en-KY"], "LC": ["en-LC"],
+    "MF": ["fr-MF"], "MQ": ["fr-MQ"], "MS": ["en-MS"], "PR": ["es-PR", "en-PR"],
+    "SX": ["nl-SX", "en-SX"], "TC": ["en-TC"], "TT": ["en-TT"], "VC": ["en-VC"],
+    "VG": ["en-VG"], "VI": ["en-VI"],
+    # South America
+    "AR": ["es-AR"], "BO": ["es-BO"], "BR": ["pt-BR"], "CL": ["es-CL"],
+    "CO": ["es-CO"], "EC": ["es-EC"], "FK": ["en-FK"], "GF": ["fr-GF"],
+    "GY": ["en-GY"], "PE": ["es-PE"], "PY": ["es-PY"], "SR": ["nl-SR"],
+    "UY": ["es-UY"], "VE": ["es-VE"],
+    # Western / Northern / Southern Europe
+    "AD": ["ca-AD", "es-AD"], "AT": ["de-AT"], "AX": ["sv-AX"], "BE": ["nl-BE", "fr-BE"],
+    "CH": ["de-CH", "fr-CH", "it-CH"], "DE": ["de-DE"], "DK": ["da-DK"],
+    "ES": ["es-ES", "ca-ES"], "FI": ["fi-FI", "sv-FI"], "FO": ["fo-FO", "da-FO"],
+    "FR": ["fr-FR"], "GB": ["en-GB"], "GG": ["en-GG"], "GI": ["en-GI"],
+    "GR": ["el-GR"], "IE": ["en-IE", "ga-IE"], "IM": ["en-IM"], "IS": ["is-IS"],
+    "IT": ["it-IT"], "JE": ["en-JE"], "LI": ["de-LI"], "LU": ["fr-LU", "de-LU", "lb-LU"],
+    "MC": ["fr-MC"], "MT": ["mt-MT", "en-MT"], "NL": ["nl-NL", "en-NL"],
+    "NO": ["nb-NO", "nn-NO"], "PT": ["pt-PT"], "SE": ["sv-SE"], "SM": ["it-SM"],
+    "VA": ["it-VA"],
+    # Central / Eastern Europe
+    "AL": ["sq-AL"], "BA": ["bs-BA", "hr-BA", "sr-BA"], "BG": ["bg-BG"],
+    "BY": ["be-BY", "ru-BY"], "CZ": ["cs-CZ"], "EE": ["et-EE"], "HR": ["hr-HR"],
+    "HU": ["hu-HU"], "LT": ["lt-LT"], "LV": ["lv-LV"], "MD": ["ro-MD", "ru-MD"],
+    "ME": ["sr-ME"], "MK": ["mk-MK", "sq-MK"], "PL": ["pl-PL"], "RO": ["ro-RO"],
+    "RS": ["sr-RS"], "RU": ["ru-RU"], "SI": ["sl-SI"], "SK": ["sk-SK"],
+    "UA": ["uk-UA", "ru-UA"], "XK": ["sq-XK", "sr-XK"],
+    # Middle East / Central Asia
+    "AE": ["ar-AE", "en-AE"], "AF": ["fa-AF", "ps-AF"], "AM": ["hy-AM"],
+    "AZ": ["az-AZ"], "BH": ["ar-BH"], "CY": ["el-CY", "tr-CY"], "GE": ["ka-GE"],
+    "IL": ["he-IL", "ar-IL", "en-IL"], "IQ": ["ar-IQ", "ku-IQ"], "IR": ["fa-IR"],
+    "JO": ["ar-JO"], "KG": ["ky-KG", "ru-KG"], "KW": ["ar-KW"], "KZ": ["kk-KZ", "ru-KZ"],
+    "LB": ["ar-LB", "fr-LB"], "OM": ["ar-OM"], "PS": ["ar-PS"], "QA": ["ar-QA"],
+    "SA": ["ar-SA"], "SY": ["ar-SY"], "TJ": ["tg-TJ", "ru-TJ"], "TM": ["tk-TM"],
+    "TR": ["tr-TR"], "UZ": ["uz-UZ", "ru-UZ"], "YE": ["ar-YE"],
+    # South Asia
+    "BD": ["bn-BD", "en-BD"], "BT": ["dz-BT", "en-BT"], "IN": ["en-IN", "hi-IN", "ta-IN", "te-IN", "bn-IN", "mr-IN"],
+    "LK": ["si-LK", "ta-LK", "en-LK"], "MV": ["dv-MV", "en-MV"], "NP": ["ne-NP"],
+    "PK": ["ur-PK", "en-PK"],
+    # East / Southeast Asia
+    "BN": ["ms-BN", "en-BN"], "CC": ["en-CC"], "CN": ["zh-CN"], "CX": ["en-CX"], "HK": ["zh-HK", "en-HK"],
+    "ID": ["id-ID"], "JP": ["ja-JP"], "KH": ["km-KH"], "KP": ["ko-KP"],
+    "KR": ["ko-KR"], "LA": ["lo-LA"], "MM": ["my-MM"], "MN": ["mn-MN"],
+    "MO": ["zh-MO", "pt-MO"], "MY": ["ms-MY", "en-MY", "zh-MY", "ta-MY"],
+    "PH": ["en-PH", "fil-PH"], "SG": ["en-SG", "zh-SG", "ms-SG", "ta-SG"],
+    "TH": ["th-TH"], "TL": ["pt-TL", "tet-TL"], "TW": ["zh-TW"], "VN": ["vi-VN"],
+    # Oceania
+    "AS": ["en-AS", "sm-AS"], "AU": ["en-AU"], "CK": ["en-CK"], "FJ": ["en-FJ"],
+    "FM": ["en-FM"], "GU": ["en-GU"], "KI": ["en-KI"], "MH": ["en-MH"],
+    "MP": ["en-MP"], "NC": ["fr-NC"], "NF": ["en-NF"], "NR": ["en-NR"],
+    "NU": ["en-NU"], "NZ": ["en-NZ"], "PF": ["fr-PF"], "PG": ["en-PG"],
+    "PN": ["en-PN"], "PW": ["en-PW"], "SB": ["en-SB"], "TK": ["en-TK"],
+    "TO": ["en-TO", "to-TO"], "TV": ["en-TV"], "VU": ["en-VU", "fr-VU"],
+    "WF": ["fr-WF"], "WS": ["sm-WS", "en-WS"],
+    # Africa
+    "AO": ["pt-AO"], "AQ": ["en-AQ"], "BF": ["fr-BF"], "BI": ["rn-BI", "fr-BI"], "BJ": ["fr-BJ"],
+    "BV": ["nb-BV"], "BW": ["en-BW"], "CD": ["fr-CD", "ln-CD", "sw-CD"], "CF": ["fr-CF"],
+    "CG": ["fr-CG"], "CI": ["fr-CI"], "CM": ["fr-CM", "en-CM"], "CV": ["pt-CV"],
+    "DJ": ["fr-DJ", "ar-DJ"], "DZ": ["ar-DZ", "fr-DZ"], "EG": ["ar-EG"],
+    "EH": ["ar-EH"], "ER": ["ti-ER", "ar-ER"], "ET": ["am-ET"], "GA": ["fr-GA"], "GS": ["en-GS"],
+    "GH": ["en-GH"], "GM": ["en-GM"], "GN": ["fr-GN"], "GQ": ["es-GQ", "fr-GQ"],
+    "GW": ["pt-GW"], "HM": ["en-HM"], "IO": ["en-IO"], "KE": ["en-KE", "sw-KE"], "KM": ["ar-KM", "fr-KM"],
+    "LR": ["en-LR"], "LS": ["en-LS"], "LY": ["ar-LY"], "MA": ["ar-MA", "fr-MA"],
+    "MG": ["mg-MG", "fr-MG"], "ML": ["fr-ML"], "MR": ["ar-MR", "fr-MR"],
+    "MU": ["en-MU", "fr-MU"], "MW": ["en-MW"], "MZ": ["pt-MZ"], "NA": ["en-NA"],
+    "NE": ["fr-NE"], "NG": ["en-NG"], "RE": ["fr-RE"], "RW": ["rw-RW", "fr-RW", "en-RW"],
+    "SC": ["en-SC", "fr-SC"], "SD": ["ar-SD", "en-SD"], "SH": ["en-SH"],
+    "SJ": ["nb-SJ"], "SL": ["en-SL"], "SN": ["fr-SN"], "SO": ["so-SO", "ar-SO"], "SS": ["en-SS"],
+    "ST": ["pt-ST"], "SZ": ["en-SZ"], "TD": ["fr-TD", "ar-TD"], "TF": ["fr-TF"], "TG": ["fr-TG"],
+    "TN": ["ar-TN", "fr-TN"], "TZ": ["sw-TZ", "en-TZ"], "UG": ["en-UG", "sw-UG"],
+    "YT": ["fr-YT"], "ZA": ["en-ZA", "af-ZA", "zu-ZA"], "ZM": ["en-ZM"], "ZW": ["en-ZW"],
+}
+
+# Timezone â†’ BCP-47 locale mapping (ported from fingerprint-chromium)
 _TIMEZONE_LOCALE_MAP: Dict[str, str] = {
     # Asia Pacific
     "Asia/Manila": "fil-PH",
@@ -96,6 +186,19 @@ def resolve_locale(timezone: str) -> str:
     """Map IANA timezone to BCP-47 locale. Falls back to 'en-US'."""
     return _TIMEZONE_LOCALE_MAP.get(timezone, "en-US")
 
+def resolve_locale_for_geo(timezone: str, country_code: Optional[str] = None) -> str:
+    """Choose a realistic browser locale for a GeoIP country/timezone.
+
+    The timezone must always match the proxy exit. Locale is allowed to vary
+    within real phone/browser usage for that country when the user has not set
+    one explicitly.
+    """
+    country = (country_code or "").upper()
+    candidates = _COUNTRY_LOCALE_VARIANTS.get(country)
+    if not candidates:
+        return resolve_locale(timezone)
+    return random.choice(candidates)
+
 
 def build_accept_language(locale: str) -> str:
     """Build a realistic Accept-Language header from a locale.
@@ -111,15 +214,54 @@ def build_accept_language(locale: str) -> str:
     elif lang == "en":
         return f"{locale},en-US;q=0.9,en;q=0.8"
     elif lang == "fil":
-        # Filipino locale: fil as secondary (NOT en-PH — that's artificial and suspicious)
+        # Filipino locale: fil as secondary (NOT en-PH â€” that's artificial and suspicious)
         # Real Android Chrome in PH sends: fil-PH,fil;q=0.9,en-US;q=0.8,en;q=0.7
         return f"{locale},{lang};q=0.9,en-US;q=0.8,en;q=0.7"
     elif locale == "en-PH":
-        # English (Philippines): valid PH business format — q appears once at the end
-        # en-PH and en-US share top priority (q=1.0), only en is at q=0.8
+        # English (Philippines): valid PH business format - q appears once at the end.
+        # en-PH and en-US share top priority (q=1.0), only en is at q=0.8.
         return "en-PH,en-US,en;q=0.8"
     else:
         return f"{locale},{lang};q=0.9,en-US;q=0.8,en;q=0.7"
+
+def make_sticky_proxy_url(proxy: Optional[str], ttl_minutes: int = 30) -> Optional[str]:
+    """Return a provider-sticky proxy URL when a safe automatic form is known.
+
+    DataImpulse rotating gateways can change exit IP on each request, which can
+    create timezone/IP mismatches on fingerprinting pages. Their documented
+    session parameters are appended to the username: `sessid.<id>` and
+    `sessttl.<minutes>`. Unknown providers are left unchanged.
+    """
+    if not proxy or "://" not in proxy:
+        return proxy
+    if proxy in _sticky_proxy_cache:
+        return _sticky_proxy_cache[proxy]
+
+    parsed = urlparse(proxy)
+    host = (parsed.hostname or "").lower()
+    username = unquote(parsed.username or "")
+    password = unquote(parsed.password or "")
+    if "dataimpulse.com" not in host or not username:
+        return proxy
+    if ";sessid." in username or ";sessttl." in username:
+        return proxy
+
+    session_id = f"damru{secrets.token_hex(4)}"
+    sticky_user = f"{username};sessid.{session_id};sessttl.{ttl_minutes}"
+
+    auth = quote(sticky_user, safe=";._-")
+    if password:
+        auth = f"{auth}:{quote(password, safe='')}"
+    netloc = auth
+    if parsed.hostname:
+        netloc = f"{netloc}@{parsed.hostname}"
+    if parsed.port:
+        netloc = f"{netloc}:{parsed.port}"
+
+    sticky = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    _sticky_proxy_cache[proxy] = sticky
+    logger.info("DataImpulse sticky proxy session enabled (ttl=%dm)", ttl_minutes)
+    return sticky
 
 
 def resolve_system_proxy(
@@ -149,7 +291,7 @@ def resolve_system_proxy(
     if not proxy:
         return None
 
-    # 2. Check if it's already bare host:port format (e.g. "198.20.189.134:50000")
+    # 2. Check if it's already bare host:port format (e.g. "proxy.example:50000")
     if "://" not in proxy and ":" in proxy:
         # Validate it's actually host:port
         parts = proxy.split(":")
@@ -168,7 +310,7 @@ def resolve_system_proxy(
     if scheme in ("http", "https"):
         return f"{host}:{port}"
 
-    # 4. SOCKS5 → try HTTP on port-1 (common proxy provider pattern)
+    # 4. SOCKS5 â†’ try HTTP on port-1 (common proxy provider pattern)
     if scheme in ("socks5", "socks5h"):
         http_port = port - 1
         logger.info(
@@ -192,14 +334,16 @@ def _extract_host_port(url: str) -> str:
     return url
 
 
-def resolve_proxy_geo(proxy: str, retries: int = 3) -> Dict[str, str]:
+def resolve_proxy_geo(proxy: str, retries: int = 3, use_cache: bool = False) -> Dict[str, str]:
     """Resolve timezone, locale, country from proxy exit IP via GeoIP lookup.
 
     Connects THROUGH the proxy to GeoIP services. Results are cached per proxy URL.
     Uses HTTPS endpoints (works through HTTP CONNECT proxies) with retries
     for rotating proxies that drop connections.
     """
-    if proxy in _geo_cache:
+    proxy = make_sticky_proxy_url(proxy) or proxy
+
+    if use_cache and proxy in _geo_cache:
         return _geo_cache[proxy]
 
     defaults = {
@@ -209,7 +353,7 @@ def resolve_proxy_geo(proxy: str, retries: int = 3) -> Dict[str, str]:
         "ip": "",
     }
 
-    # GeoIP endpoints — HTTPS first (HTTP CONNECT proxy tunnels HTTPS fine,
+    # GeoIP endpoints - HTTPS first (HTTP CONNECT proxy tunnels HTTPS fine,
     # but can't proxy plain HTTP). Fallback to HTTP for SOCKS5 proxies.
     _ENDPOINTS = [
         ("https://ipapi.co/json/", lambda d: (d.get("timezone"), d.get("country_code"), d.get("ip"))),
@@ -221,10 +365,14 @@ def resolve_proxy_geo(proxy: str, retries: int = 3) -> Dict[str, str]:
         import requests
         import time
 
-        # Build proxy dict for requests
+        # Build proxy dict for requests. Bare host:port values are Android
+        # system HTTP proxies, including local CONNECT bridges. Resolve GeoIP
+        # through the same path Android Chrome will use to avoid timezone leaks.
         proxy_url = proxy
-        if "socks5://" in proxy and "socks5h://" not in proxy:
-            proxy_url = proxy.replace("socks5://", "socks5h://")
+        if "://" not in proxy_url:
+            proxy_url = f"http://{proxy_url}"
+        if "socks5://" in proxy_url and "socks5h://" not in proxy_url:
+            proxy_url = proxy_url.replace("socks5://", "socks5h://")
         proxies = {"http": proxy_url, "https": proxy_url}
 
         last_err = None
@@ -236,14 +384,15 @@ def resolve_proxy_geo(proxy: str, retries: int = 3) -> Dict[str, str]:
                     tz, cc, ip = extractor(data)
 
                     if tz:
-                        locale = resolve_locale(tz)
+                        locale = resolve_locale_for_geo(tz, cc)
                         result = {
                             "timezone": tz,
                             "locale": locale,
                             "country_code": cc or "US",
                             "ip": ip or "",
                         }
-                        _geo_cache[proxy] = result
+                        if use_cache:
+                            _geo_cache[proxy] = result
                         logger.info("Proxy GeoIP: %s -> %s (%s) via %s",
                                     proxy.split("@")[-1][:30], tz, locale,
                                     url.split("/")[2])
@@ -257,9 +406,11 @@ def resolve_proxy_geo(proxy: str, retries: int = 3) -> Dict[str, str]:
                 logger.debug("GeoIP retry %d/%d...", attempt, retries)
 
         logger.warning("GeoIP lookup failed after %d retries: %s (using defaults)", retries, last_err)
-        _geo_cache[proxy] = defaults
+        if use_cache:
+            _geo_cache[proxy] = defaults
         return defaults
     except Exception as e:
         logger.warning("GeoIP lookup failed: %s (using defaults)", e)
-        _geo_cache[proxy] = defaults
+        if use_cache:
+            _geo_cache[proxy] = defaults
         return defaults

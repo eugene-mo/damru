@@ -8,16 +8,6 @@ Usage:
         page.goto("https://example.com")
 """
 
-# Patch playwright's crPage.js before anything imports playwright.
-# This must happen before .async_core / .core which import playwright.
-from .playwright_patch import ensure_patched as _ensure_pw_patched
-_ensure_pw_patched()
-
-from .async_core import AsyncDamru, DamruError
-from .core import Damru
-from .devices import AndroidDevice, get_device, get_random_device, list_device_names
-from .pool import DamruPool, DamruPoolSync
-
 __version__ = "0.1.0"
 __all__ = [
     "Damru",
@@ -30,3 +20,74 @@ __all__ = [
     "get_random_device",
     "list_device_names",
 ]
+
+_LAZY_EXPORTS = set(__all__)
+
+
+def _patch_windows_asyncio_shutdown_noise() -> None:
+    """Suppress a Windows Proactor destructor bug after successful WSL subprocess use."""
+    import sys
+
+    if sys.platform != "win32":
+        return
+    try:
+        import asyncio.base_subprocess as base_subprocess
+        import asyncio.proactor_events as proactor_events
+    except Exception:
+        return
+
+    def _wrap_del(cls) -> None:
+        if getattr(cls, "_damru_close_pipe_patch", False):
+            return
+        original = getattr(cls, "__del__", None)
+        if original is None:
+            return
+
+        def _quiet_del(self):
+            try:
+                original(self)
+            except ValueError as exc:
+                if "I/O operation on closed pipe" not in str(exc):
+                    raise
+
+        cls.__del__ = _quiet_del
+        cls._damru_close_pipe_patch = True
+
+    _wrap_del(proactor_events._ProactorBasePipeTransport)
+    _wrap_del(base_subprocess.BaseSubprocessTransport)
+
+def _load_exports() -> None:
+    # Patch Playwright's crPage.js before importing modules that import Playwright.
+    # Keeping this lazy lets `python -m damru check-env` run on fresh machines
+    # where Playwright is not installed yet.
+    from .playwright_patch import ensure_patched as _ensure_pw_patched
+
+    _ensure_pw_patched()
+
+    from .async_core import AsyncDamru, DamruError
+    from .core import Damru
+    from .devices import AndroidDevice, get_device, get_random_device, list_device_names
+    from .pool import DamruPool, DamruPoolSync
+
+    globals().update(
+        {
+            "Damru": Damru,
+            "AsyncDamru": AsyncDamru,
+            "DamruPool": DamruPool,
+            "DamruPoolSync": DamruPoolSync,
+            "DamruError": DamruError,
+            "AndroidDevice": AndroidDevice,
+            "get_device": get_device,
+            "get_random_device": get_random_device,
+            "list_device_names": list_device_names,
+        }
+    )
+
+def __getattr__(name: str):
+    if name in _LAZY_EXPORTS:
+        _load_exports()
+        return globals()[name]
+    raise AttributeError(f"module 'damru' has no attribute {name!r}")
+
+
+_patch_windows_asyncio_shutdown_noise()

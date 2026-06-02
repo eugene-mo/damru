@@ -47,9 +47,14 @@ def build_profile(
         timezone: IANA timezone. Auto-detected from proxy IP if None.
         locale: BCP-47 locale. Auto-detected from timezone if None.
     """
-    # Auto-detect timezone/locale from proxy
-    if proxy and (timezone is None or locale is None):
-        geo = resolve_proxy_geo(proxy)
+    # Resolve Android system HTTP proxy first. When present, use that same
+    # path for GeoIP so browser timezone matches the proxy Chrome actually uses.
+    android_proxy = resolve_system_proxy(proxy, http_proxy)
+
+    # Auto-detect timezone/locale from the browser proxy path.
+    geo_proxy = android_proxy or proxy
+    if geo_proxy and (timezone is None or locale is None):
+        geo = resolve_proxy_geo(geo_proxy)
         if timezone is None:
             timezone = geo["timezone"]
         if locale is None:
@@ -59,9 +64,6 @@ def build_profile(
         timezone = "America/New_York"
     if locale is None:
         locale = resolve_locale(timezone)
-
-    # Resolve Android system HTTP proxy
-    android_proxy = resolve_system_proxy(proxy, http_proxy)
 
     system_props = device.system_props()
     chrome_flags = _build_chrome_flags(device, timezone, locale)

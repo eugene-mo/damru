@@ -1,4 +1,4 @@
-"""Test todetect.net and fingerprint.com/demo only (skip CreepJS)."""
+﻿"""Test todetect.net and fingerprint.com/demo only (skip CreepJS)."""
 import asyncio
 import json
 import sys
@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "todetect_fingerprint")
 
 async def test_todetect(page):

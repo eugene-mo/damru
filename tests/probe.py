@@ -1,11 +1,11 @@
-"""Quick diagnostic probe - tests GPU spoof, WebGL, todetect.net, BrowserScan."""
+﻿"""Quick diagnostic probe - tests GPU spoof, WebGL, todetect.net, BrowserScan."""
 import sys, os, asyncio, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from damru import AsyncDamru
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 async def probe():
     print("Launching AsyncDamru...")

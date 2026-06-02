@@ -1,4 +1,4 @@
-"""MuMu mode: todetect.net test.
+﻿"""MuMu mode: todetect.net test.
 
 Tests stealth quality on MuMu with the new fixes:
   Fix 1: GPU custom mode (Mali/Xclipse/Adreno all work)
@@ -22,8 +22,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP   = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP   = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "mumu_todetect")
 
 
@@ -47,10 +47,10 @@ async def main():
         target = random.choice(pool or DEVICES)
 
     print("=" * 60)
-    print("  MuMu — todetect.net")
+    print("  MuMu â€” todetect.net")
     print("=" * 60)
     print(f"  Device:  {target.name}  (Android {target.android_version})")
-    print(f"  GPU:     {target.gpu_family} — {target.webgl_renderer}")
+    print(f"  GPU:     {target.gpu_family} â€” {target.webgl_renderer}")
     print(f"  mem:     {target.device_memory} GB   cores: {target.hardware_concurrency}")
     print()
 
@@ -66,7 +66,7 @@ async def main():
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         await page.goto("https://todetect.net/", wait_until="domcontentloaded", timeout=60000)
-        print("  Loaded — waiting 25s for analysis...")
+        print("  Loaded â€” waiting 25s for analysis...")
         await sleep(25)
 
         ss = os.path.join(RESULTS_DIR, "todetect.png")

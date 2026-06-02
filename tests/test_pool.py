@@ -1,4 +1,4 @@
-"""Test DamruPool — verify unique fingerprint per session on same device."""
+﻿"""Test DamruPool â€” verify unique fingerprint per session on same device."""
 import asyncio
 import sys
 import os
@@ -6,13 +6,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import DamruPool
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():
     print("=" * 60)
-    print("  DamruPool Test — 2 sessions, same device, different fingerprints")
+    print("  DamruPool Test â€” 2 sessions, same device, different fingerprints")
     print("=" * 60)
 
     async with DamruPool(
@@ -42,7 +42,7 @@ async def main():
             print(f"  screen={hw['screenW']}x{hw['screenH']}")
             session1 = hw
 
-        # Session 2 — should be different fingerprint
+        # Session 2 â€” should be different fingerprint
         print("\n--- Session 2 ---")
         async with pool.session() as ctx:
             page = ctx.pages[0] if ctx.pages else await ctx.new_page()

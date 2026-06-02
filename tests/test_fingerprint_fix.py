@@ -1,4 +1,4 @@
-"""Test fingerprint.com/demo specifically with longer wait + retry."""
+﻿"""Test fingerprint.com/demo specifically with longer wait + retry."""
 import asyncio
 import sys
 import os
@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from damru import AsyncDamru
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():

@@ -1,28 +1,48 @@
-# 🛠️ Scripts (`scripts/`)
+# Scripts
 
-This directory contains standalone utility scripts for maintaining and deploying the Damru infrastructure.
+Standalone maintenance utilities for Damru development, proof capture, and image preparation.
 
----
+## `bake_image.py`
 
-## 🧰 Available Scripts
+Builds a warm `damru-redroid:latest` Docker image from the base Redroid image. It boots a temporary Redroid container, installs Chrome/TTS/native assets, prepares warm Chrome preferences, commits the result, and removes the temporary container.
 
-### `bake_image.py`
-
-This is the most critical infrastructure script. It takes a base `redroid` Android Docker image, boots it up, and applies all of Damru's modifications permanently. 
-
-**What it does:**
-1. Installs the Chrome APKs (from `chrome-apks/`).
-2. Injects the native C binaries (from `native/`).
-3. Configures Android TTS engines.
-4. "Commits" the running container into a brand new `.tar` image.
-
-> **Result:** By using `bake_image.py`, you generate the [damru-redroid-latest.tar](https://drive.google.com/file/d/1na6YYHbpvDlaXhicg_nAKiaMFaYRN99U/view?usp=sharing) file. This turns a slow 2-minute container setup into an instant 3-second boot for your scaling operations!
-
----
-
-## 🚀 Usage
+Use it only inside Linux or WSL2:
 
 ```bash
-python scripts/bake_image.py --help
+python scripts/bake_image.py --image-name damru-redroid:latest
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
 ```
-*(Ensure Docker is running and you have sufficient disk space before baking images).*
+
+The CLI equivalent is:
+
+```bash
+python -m damru bake-image --image damru-redroid:latest
+```
+
+The exported `.tar` is intentionally ignored by Git because it is large. Keep `damru-redroid-latest.tar.sha256` with the release artifact.
+
+## `capture_proof.py`
+
+Captures sanitized viewport screenshots for proof targets such as Amazon, Foot Locker/DataDome, Fingerprint Pro, Sannysoft, and CreepJS.
+
+Runtime proxy values are read from environment variables only:
+
+```bash
+DAMRU_PROXY='socks5://user:pass@host:port' \
+DAMRU_HTTP_PROXY='172.17.0.1:18888' \
+python scripts/capture_proof.py --device pixel_8_pro --out docs/assets/proof/sites
+```
+
+Do not hardcode proxy credentials in this repo.
+
+## `socks_http_bridge.py`
+
+Local HTTP CONNECT bridge for proof runs where Android needs an unauthenticated HTTP proxy but the upstream proxy is authenticated SOCKS5.
+
+```bash
+UPSTREAM_PROXY='socks5://user:pass@host:port' \
+python scripts/socks_http_bridge.py --listen 0.0.0.0 --port 18888
+```
+
+This helper stores no credentials; credentials come from the runtime environment.

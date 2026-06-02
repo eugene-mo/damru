@@ -1,4 +1,4 @@
-# 🐍 Damru Python API Reference
+#  Damru Python API Reference
 
 Welcome to the definitive API reference for the **Damru** library. This guide covers everything from basic automation to advanced multi-container orchestration and stealth tuning.
 
@@ -6,7 +6,7 @@ Damru is designed to be a transparent drop-in replacement for standard Playwrigh
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 - [Core Classes](#-core-classes)
     - [AsyncDamru (Recommended)](#asyncdamru-recommended)
     - [Damru (Synchronous)](#damru-synchronous)
@@ -22,7 +22,7 @@ Damru is designed to be a transparent drop-in replacement for standard Playwrigh
 
 ---
 
-## 🏛️ Core Classes
+## Core Classes
 
 ### `AsyncDamru` (Recommended)
 The primary asynchronous context manager. It orchestrates the 8 layers of stealth and returns a Playwright `BrowserContext`.
@@ -31,20 +31,31 @@ The primary asynchronous context manager. It orchestrates the 8 layers of stealt
 ```python
 from damru import AsyncDamru
 
-async with AsyncDamru(device="pixel_8_pro", proxy="socks5://...") as browser:
-    page = await browser.new_page()
+async with AsyncDamru(device="pixel_8_pro", proxy="socks5://...") as context:
+    page = await context.new_page()
     await page.goto("https://creepjs.com")
 ```
+
+Damru expects Redroid to run inside Linux or WSL2. On Windows, Docker/Redroid is managed inside WSL2; native Windows Docker is not a supported Redroid backend.
 
 #### `__init__` Parameters
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `device` | `str` | `"random"` | Target device string (e.g., `"samsung_s24_ultra"`). |
+| `device` | `str` | `"random"` | Target device string (e.g., `"samsung_galaxy_s24_ultra"`). |
 | `serial` | `str` | `None` | ADB identifier. If `None`, Damru auto-detects connected devices. |
-| `proxy` | `str` | `None` | SOCKS5/HTTP proxy. Damru uses this to match Geo-Identity (TZ, Locale). |
-| `timezone` | `str` | `None` | Force a specific IANA Timezone (e.g., `"Europe/London"`). |
-| `locale` | `str` | `None` | Force a specific BCP-47 Locale (e.g., `"fr-FR"`). |
+| `proxy` | `str` | `None` | Browser proxy URL used for GeoIP and Python-side proxy checks. SOCKS5 and HTTP URLs are accepted. |
+| `http_proxy` | `str` | `None` | Android system HTTP proxy as `host:port` or `http://user:pass@host:port`. Use this when Android Chrome must route through an HTTP CONNECT proxy or local bridge. |
+| `timezone` | `str` | `None` | Force a specific IANA timezone. Leave unset so Damru resolves it from the active proxy exit. |
+| `locale` | `str` | `None` | Force a specific BCP-47 locale. Leave unset so Damru chooses a realistic locale for the proxy country. |
 | `debug` | `bool` | `False` | Enables verbose console logging for debugging OS patches. |
+
+Proxy timezone safety:
+
+- If `http_proxy` is provided, Damru resolves GeoIP through that same Android system proxy path because it is the path Chrome actually uses.
+- If only `proxy` is provided, Damru derives the Android proxy when possible.
+- Rotating residential proxies are resolved at session start and rechecked through Chrome after CDP connects, so browser timezone and locale follow the actual exit IP instead of stale cached data.
+- Explicit `timezone` or `locale` values always override auto detection. Only set them when you know they match your proxy exit.
+- Auto locale selection covers standard ISO country codes plus CLDR exceptional territory codes. For countries with multiple common phone locales, Damru may choose a realistic variant, for example `en-PH` or `fil-PH` for the Philippines, and `en-IN` or `hi-IN` for India.
 
 #### Methods & Properties
 *   **`await new_page()`**: Creates a new stealth-hardened `Page`.
@@ -61,15 +72,15 @@ The blocking version of `AsyncDamru`. Perfect for traditional scripts or multi-t
 ```python
 from damru import Damru
 
-with Damru(device="pixel_7") as browser:
-    page = browser.new_page()
+with Damru(device="pixel_7") as context:
+    page = context.new_page()
     page.goto("https://bot.sannysoft.com")
 ```
 *Note: Methods and parameters are identical to `AsyncDamru` but without `await`.*
 
 ---
 
-## 🚨 Exception Handling
+## Exception Handling
 
 ### `DamruError`
 All Damru-specific failures (ADB connection errors, rooting issues, binary patching failures) raise a `DamruError`.
@@ -86,7 +97,7 @@ except DamruError as e:
 
 ---
 
-## 🏊 Pool Management
+## Pool Management
 
 ### `DamruPool` (Async)
 Designed for massive parallelization across dozens of Docker containers. It automatically manages container lifecycles and port forwarding.
@@ -96,7 +107,7 @@ Designed for massive parallelization across dozens of Docker containers. It auto
 from damru import DamruPool
 
 # mode="auto" automatically starts and manages Redroid Docker containers
-async with DamruPool(size=10, mode="auto") as pool:
+async with DamruPool(mode="auto", max_devices=10) as pool:
     # pool.session() provides an AsyncDamru context from an available container
     async with pool.session() as browser:
         page = await browser.new_page()
@@ -106,9 +117,15 @@ async with DamruPool(size=10, mode="auto") as pool:
 #### `__init__` Parameters
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `size` | `int` | `1` | Number of concurrent instances/containers to maintain. |
-| `mode` | `str` | `"auto"` | Deployment mode: `"auto"` (manages Redroid via Docker), `"mumu"` (local MuMu Player instances), or `"remote"` (connects to existing ADB instances). |
-| `proxy_list` | `list[str]` | `None` | List of proxies. Pool rotates through these when assigning contexts. |
+| `max_devices` | `int` | config `NUM_DEVICES` | Number of concurrent instances/containers to maintain. Use `0` only in manual mode to use every detected ADB device. |
+| `mode` | `str` | config `MODE` | Deployment mode: `"auto"` manages Redroid via Docker, `"manual"` uses existing ADB devices, and `"mumu"` is experimental. Redroid auto mode is the supported production path. |
+| `proxy` | `str` | config `PROXY` | One proxy shared by all sessions. |
+| `proxies` | `list[str]` | config `PROXIES` | Per-worker proxy list. Pool rotates through these by slot index. |
+| `http_proxy` / `http_proxies` | `str` / `list[str]` | config values | Android system HTTP proxy override when it differs from the browser proxy. GeoIP is resolved through this path when present. |
+| `device` | `str` | config `DEVICE` | Fixed device profile, or `None`/`"random"` for per-session random profiles. |
+| `timezone` / `locale` | `str` | config values | Force timezone and locale instead of deriving them from proxy/profile data. |
+| `chrome_apk` | `str` | config `CHROME_APK` | Chrome APK file or split-APK directory for auto mode. |
+| `wsl_distro` | `str` | config `WSL_DISTRO` | Windows only: WSL distro that owns Docker/Redroid. |
 
 ### `DamruPoolSync` (Sync)
 The synchronous counterpart, ideal for distributed task workers and multi-threading frameworks like `concurrent.futures`.
@@ -117,20 +134,19 @@ The synchronous counterpart, ideal for distributed task workers and multi-thread
 ```python
 from damru import DamruPoolSync
 
-# proxy_list enables per-container proxy rotation
-with DamruPoolSync(size=5, proxy_list=["socks5://..."]) as pool:
-    # Yields fully prepared browser contexts as they become ready
-    for context in pool.get_contexts():
+# proxies enables per-container proxy rotation
+with DamruPoolSync(mode="auto", max_devices=5, proxies=["socks5://..."]) as pool:
+    with pool.session() as context:
         page = context.new_page()
-        ...
+        page.goto("https://example.com")
 ```
 
 ---
 
-## 📱 Device Management
+## Device Management
 
 ### `AndroidDevice` Database
-Access the physical specifications of our 32+ device profiles.
+Access the physical specifications of the built-in device profiles. The full generated list is in [DEVICE_PROFILES.md](DEVICE_PROFILES.md).
 
 ```python
 from damru import list_device_names, get_device, get_random_device
@@ -145,24 +161,52 @@ random_phone = get_random_device(android_version="13")
 
 ---
 
-## ⚙️ Advanced Configuration
+## Advanced Configuration
 
 You can tune Damru's behavior globally via the `damru.config` module before initialization.
+
+On Windows, installing Damru's bundled WSL kernel is intentionally high-friction: use a fresh/dedicated WSL distro when possible, and pass `--confirm-wsl-kernel-risk` for noninteractive setup. Native Linux/Ubuntu does not use the WSL kernel installer.
+
+For first-run setup, prefer the CLI:
+
+```bash
+python -m damru setup
+python -m damru check-env
+python -m damru fix-wsl
+```
+
+`check-env` verifies Linux/WSL tools, Docker, binderfs, Chrome APK discovery, and the Damru Playwright `crPage.js` patch. `fix-wsl` retries safe Docker, binderfs, routing, and netfilter repairs. On Windows, Docker/Redroid is always managed inside WSL2; native Windows Docker is not used. Redroid auto mode routes ADB through WSL and can use host networking with per-worker ADB port remapping (`wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, ...) when Docker-published ADB ports are unreliable. Host-network containers are started with Android DNS boot parameters, and Damru repairs WSL policy routing/default routes after setup so no-proxy HTTPS navigation works in fresh WSL sessions. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL uses legacy iptables where available because several WSL kernels reject Docker's `addrtype` NAT rule through nft.
+
+Damru normalizes new Android Chrome tabs before returning them from `context.new_page()`. User code can immediately navigate a new page in single sessions or concurrent pools without first fighting Chrome's Android startup/home-tab navigation.
 
 ```python
 import damru.config
 
 # Custom WSL2 settings
 damru.config.WSL_DISTRO = "Ubuntu-22.04"
-damru.config.WSL_PASSWORD = "my-secure-password"
+damru.config.WSL_USERNAME = "my-wsl-user"
+damru.config.WSL_PASSWORD = ""  # compatibility only; setup asks for sudo when needed
 
 # Path to local Chrome APKs if not in the default folder
 damru.config.CHROME_APK = "/custom/path/to/chrome.apk"
 ```
 
+Existing WSL installs are supported. Set `WSL_DISTRO` and `WSL_USERNAME`, or pass them to `python -m damru setup`; Damru uses `wsl -u root` for Windows-launched privileged WSL commands when available, and the guided Linux/WSL flow asks for sudo only when it is actually running as a normal WSL user. On native Linux, `install-deps` installs `python3-venv`, Docker, ADB, binderfs tools, and adds the current user to the Docker group when possible; open a new login shell or reconnect SSH if Docker works with sudo but `check-env` still reports a socket permission failure.
+
+For optional visual debugging, use the CLI rather than changing the Python API surface:
+
+```bash
+python -m damru devices
+python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
+python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+python -m damru view --serial wsl:127.0.0.1:5600 --no-control
+```
+
+These commands use ADB/scrcpy and are intentionally not started by `AsyncDamru`, `Damru`, or pool sessions.
+
 ---
 
-## 🛠️ Advanced Modules
+## Advanced Modules
 
 ### Edge-Layer Bypass (CDN TLS)
 Defeat CDN TLS and other TLS-fingerprinting WAFs by replaying requests through `curl_cffi` browser impersonation.
@@ -182,7 +226,7 @@ async with AsyncDamru() as browser:
 
 ---
 
-## 📖 Cookbook: Common Patterns
+## Cookbook: Common Patterns
 
 ### 1. Multi-Page Scraping in One Session
 ```python
@@ -211,11 +255,25 @@ async with AsyncDamru(proxy="socks5://user:pass@host:port") as browser:
     ...
 ```
 
+For Android system proxy compatibility, provide an HTTP CONNECT proxy separately:
+
+```python
+async with AsyncDamru(
+    proxy="socks5://user:pass@host:port",
+    http_proxy="127.0.0.1:18888",
+) as browser:
+    page = await browser.new_page()
+    await page.goto("https://demo.fingerprint.com/playground")
+```
+
+Leave `timezone` and `locale` unset unless you intentionally need fixed values. Damru will set Android timezone, Chrome timezone, `Accept-Language`, and `Intl` locale from the proxy exit.
+
 ---
 
-## ⚠️ Requirements
+## Requirements
 *   **Host**: Windows (WSL2) or Linux.
-*   **Android**: Rooted Redroid (Docker) or MuMu Player.
+*   **Android**: Rooted Redroid in Docker. MuMu Player code is experimental and not recommended for production.
 *   **Python**: 3.10 or higher.
-*   **Main Dependencies**: `playwright`, `requests`, `pysocks`.
+*   **Main Dependencies**: `playwright>=1.40,<1.60`, `requests`, `pysocks`.
+*   **Playwright Patch**: Damru ships and verifies a patched `crPage.js` file used to reduce CDP/Runtime detection surface.
 *   **Stealth Add-ons**: `curl_cffi` (highly recommended for TLS spoofing).

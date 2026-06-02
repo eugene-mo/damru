@@ -1,4 +1,4 @@
-"""End-to-end test of damru pipeline with PH proxy.
+﻿"""End-to-end test of damru pipeline with PH proxy.
 
 Tests the full pipeline with ROOT-LEVEL ONLY spoofing (zero JS injection):
   1. ADB connection
@@ -26,8 +26,8 @@ from damru.proxy import build_accept_language, resolve_proxy_geo
 from damru.utils import setup_logging, sleep
 
 # SOCKS5 for Python-side GeoIP, HTTP for Android system proxy
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 TARGET_DEVICE = "samsung_galaxy_s22_ultra"
 
 
@@ -253,7 +253,7 @@ async def main():
 
     # Proxy check - exit IP should NOT be the proxy server IP or user's Indian IP
     origin = identity.get("originIp", "")
-    if origin and "198.20" not in origin and "103.240" not in origin:
+    if origin and "proxy.example" not in origin and "103.240" not in origin:
         checks.append(("[PASS]", f"Proxy working - exit IP: {origin}"))
     elif origin:
         checks.append(("[FAIL]", f"Proxy NOT working - IP: {origin}"))

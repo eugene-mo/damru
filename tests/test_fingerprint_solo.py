@@ -1,10 +1,10 @@
-"""Test fingerprint.com/demo only."""
+﻿"""Test fingerprint.com/demo only."""
 import asyncio, json, sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "fingerprint_solo")
 
 async def main():

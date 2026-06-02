@@ -34,7 +34,7 @@ class ChromeManager:
         self.adb = adb
         self.package = package or "com.android.chrome"
 
-    async def detect_package(self, retries: int = 5, delay: float = 3.0) -> str:
+    async def detect_package(self, retries: int = 10, delay: float = 3.0) -> str:
         """Find which Chrome variant is installed.
 
         Retries because package manager may not be fully initialised immediately

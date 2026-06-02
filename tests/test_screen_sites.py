@@ -1,4 +1,4 @@
-"""Verify faked screen resolution on real fingerprinting sites."""
+﻿"""Verify faked screen resolution on real fingerprinting sites."""
 import asyncio
 import sys
 import os
@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 from damru.devices import get_device
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 # Pixel 8 Pro has distinctive resolution: 1344x2992 @560dpi
 DEVICE = "Google Pixel 8 Pro"
@@ -31,7 +31,7 @@ async def main():
     ) as context:
         page = context.pages[0] if context.pages else await context.new_page()
 
-        # ── Test 0: Direct JS check ──
+        # â”€â”€ Test 0: Direct JS check â”€â”€
         print("\n--- [0] Direct JS Check ---")
         await page.goto("data:text/html,<h1>screen</h1>", wait_until="domcontentloaded", timeout=10000)
         await asyncio.sleep(1)
@@ -56,7 +56,7 @@ async def main():
         print(f"  color:  {sc['colorDepth']}")
         print(f"  orient: {sc['orientation']}")
 
-        # ── Test 1: BrowserLeaks ──
+        # â”€â”€ Test 1: BrowserLeaks â”€â”€
         print("\n--- [1] BrowserLeaks ---")
         try:
             await page.goto("https://browserleaks.com/javascript", wait_until="domcontentloaded", timeout=45000)
@@ -82,7 +82,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # ── Test 2: BrowserScan ──
+        # â”€â”€ Test 2: BrowserScan â”€â”€
         print("\n--- [2] BrowserScan ---")
         try:
             await page.goto("https://www.browserscan.net/", wait_until="domcontentloaded", timeout=45000)
@@ -96,7 +96,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # ── Test 3: whatismyresolution.com (simple) ──
+        # â”€â”€ Test 3: whatismyresolution.com (simple) â”€â”€
         print("\n--- [3] whatismyresolution.com ---")
         try:
             await page.goto("https://whatismyscreenresolution.net/", wait_until="domcontentloaded", timeout=30000)
@@ -110,7 +110,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # ── Test 4: deviceinfo.me ──
+        # â”€â”€ Test 4: deviceinfo.me â”€â”€
         print("\n--- [4] deviceinfo.me ---")
         try:
             await page.goto("https://www.deviceinfo.me/", wait_until="domcontentloaded", timeout=45000)

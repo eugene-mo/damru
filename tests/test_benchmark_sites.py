@@ -1,4 +1,4 @@
-"""Benchmark damru against CreepJS, todetect.net, and fingerprint.com/demo.
+﻿"""Benchmark damru against CreepJS, todetect.net, and fingerprint.com/demo.
 
 Uses existing running container (warm start) for speed.
 Takes screenshots and extracts detection results.
@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "benchmark_sites")
 
 
@@ -315,7 +315,7 @@ async def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("=" * 60)
-    print("  damru Benchmark — CreepJS + todetect.net + fingerprint.com")
+    print("  damru Benchmark â€” CreepJS + todetect.net + fingerprint.com")
     print("=" * 60)
     t_start = time.monotonic()
 

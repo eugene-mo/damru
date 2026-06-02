@@ -1,4 +1,4 @@
-"""Verify faked CPU cores + RAM on real fingerprinting sites."""
+﻿"""Verify faked CPU cores + RAM on real fingerprinting sites."""
 import asyncio
 import sys
 import os
@@ -7,10 +7,10 @@ import re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
-# Use S24 FE (10 cores, 8GB) — easy to spot if faked correctly
+# Use S24 FE (10 cores, 8GB) â€” easy to spot if faked correctly
 DEVICE = "Samsung Galaxy S24 FE"
 EXPECTED_CORES = 10
 EXPECTED_MEM = 8
@@ -32,7 +32,7 @@ async def main():
     ) as context:
         page = context.pages[0] if context.pages else await context.new_page()
 
-        # ── Test 0: Direct JS check (baseline) ──
+        # â”€â”€ Test 0: Direct JS check (baseline) â”€â”€
         print("\n--- [0] Direct JS Check ---")
         await page.goto("data:text/html,<h1>hw</h1>", wait_until="domcontentloaded", timeout=10000)
         await asyncio.sleep(1)
@@ -40,7 +40,7 @@ async def main():
         print(f"  cores={hw['cores']} mem={hw['mem']}")
         print(f"  {'PASS' if hw['cores'] == EXPECTED_CORES and hw['mem'] == EXPECTED_MEM else 'FAIL'}")
 
-        # ── Test 1: BrowserLeaks ──
+        # â”€â”€ Test 1: BrowserLeaks â”€â”€
         print("\n--- [1] BrowserLeaks (browserleaks.com/javascript) ---")
         try:
             await page.goto("https://browserleaks.com/javascript", wait_until="domcontentloaded", timeout=45000)
@@ -74,7 +74,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # ── Test 2: BrowserScan ──
+        # â”€â”€ Test 2: BrowserScan â”€â”€
         print("\n--- [2] BrowserScan (browserscan.net) ---")
         try:
             await page.goto("https://www.browserscan.net/", wait_until="domcontentloaded", timeout=45000)
@@ -105,7 +105,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # ── Test 3: CreepJS ──
+        # â”€â”€ Test 3: CreepJS â”€â”€
         print("\n--- [3] CreepJS ---")
         try:
             await page.goto("https://abrahamjuliot.github.io/creepjs/", wait_until="domcontentloaded", timeout=45000)
@@ -133,7 +133,7 @@ async def main():
         except Exception as e:
             print(f"  ERROR: {e}")
 
-        # ── Test 4: deviceinfo.me ──
+        # â”€â”€ Test 4: deviceinfo.me â”€â”€
         print("\n--- [4] deviceinfo.me ---")
         try:
             await page.goto("https://www.deviceinfo.me/", wait_until="domcontentloaded", timeout=45000)

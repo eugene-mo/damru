@@ -1,4 +1,4 @@
-"""Test TLS fingerprint randomization via tls.peet.ws/api/all.
+﻿"""Test TLS fingerprint randomization via tls.peet.ws/api/all.
 
 Launches 2 redroid sessions (auto mode) and captures JA3/JA4/HTTP2
 fingerprints from Chrome to verify they're actually changing.
@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import DamruPool
 from damru.utils import setup_logging
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 TLS_URL = "https://tls.peet.ws/api/all"
 

@@ -1,4 +1,4 @@
-"""BrowserScan bot-detection test with damru on redroid.
+﻿"""BrowserScan bot-detection test with damru on redroid.
 
 Navigates to browserscan.net/bot-detection, waits for results, and extracts
 all detection signals with detailed breakdown.
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 from damru.utils import sleep
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():

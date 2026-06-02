@@ -1,57 +1,57 @@
 # Damru Automation Gaps - Complete Analysis & Fix Plan
 
 **Date**: 2026-02-18
-**Status**: Planned (not yet implemented)
+**Status**: Partially implemented. The CLI setup/check/install path now exists; this document is retained as the broader automation roadmap.
 **Priority**: High - Make damru fully automated from A to Z
 
 ---
 
-## ✅ What Damru ALREADY Does (Good!)
+## What Damru ALREADY Does (Good!)
 
 | Feature | Status | Location |
 |---------|--------|----------|
-| Auto-install Docker | ✅ | docker.py:287-317 |
-| Auto-create containers | ✅ | docker.py:342-387 |
-| Auto-load kernel modules | ✅ | docker.py:202-221 |
-| Auto-mount binderfs | ✅ | docker.py:223-246 |
-| Auto-start Docker daemon | ✅ | docker.py:180-195 |
-| Auto-detect WSL distro | ✅ | docker.py:257-285 |
+| Auto-install Docker |  | docker.py:287-317 |
+| Auto-create containers |  | docker.py:342-387 |
+| Auto-load kernel modules |  | docker.py:202-221 |
+| Auto-mount binderfs |  | docker.py:223-246 |
+| Auto-start Docker daemon |  | docker.py:180-195 |
+| Auto-detect WSL distro |  | docker.py:257-285 |
 
 ---
 
-## ❌ CRITICAL GAPS - What's Missing
+## CRITICAL GAPS - What's Missing
 
-### 🚨 1. Image Management (BIGGEST ISSUE)
+### 1. Image Management (BIGGEST ISSUE)
 
 **Current code (docker.py line 470):**
 ```python
 # Just assumes image exists - no check!
 await self._run_cmd(
-    self._docker_cmd("run", "-d", ..., REDROID_IMAGE, ...),  # ← No check!
+    self._docker_cmd("run", "-d", ..., REDROID_IMAGE, ...),  #  No check!
 )
 ```
 
 **Missing:**
-- ❌ No `docker pull` logic
-- ❌ No image existence check
-- ❌ No fallback to `redroid/redroid:14.0.0_64only-latest` if baked image missing
-- ❌ No version/tag management
+-  No `docker pull` logic
+-  No image existence check
+-  No fallback to `redroid/redroid:14.0.0_64only-latest` if baked image missing
+-  No version/tag management
 
 **Impact**: Crashes on first run if image not present!
 
 ---
 
-### 🚨 2. Storage Location (WSL, NOT HDD!)
+### 2. Storage Location (WSL, NOT HDD!)
 
 **Current**: Images stored in WSL2 virtual disk
 ```bash
-Docker Root Dir: /var/lib/docker  ← Inside WSL!
+Docker Root Dir: /var/lib/docker   Inside WSL!
 ```
 
 **WSL2 disk location**: `C:\Users\<User>\AppData\Local\Packages\CanonicalGroupLimited.Ubuntu_...`
-- ❌ Uses limited VHD space
-- ❌ Can't be easily backed up
-- ❌ Not in damru directory
+-  Uses limited VHD space
+-  Can't be easily backed up
+-  Not in damru directory
 
 **Desired**: Images in `C:\path\to\damru\images\`
 
@@ -59,43 +59,51 @@ Docker Root Dir: /var/lib/docker  ← Inside WSL!
 
 ---
 
-### 🚨 3. No Setup CLI / Installer
+### 3. Setup CLI / Installer
 
-**Missing files:**
-- ❌ No `setup.py` entry points
-- ❌ No `damru setup` command
-- ❌ No `damru init` command
-- ❌ No interactive installer
+**Current status:**
+- `damru` console entry point exists.
+- `python -m damru setup` writes config and can run dependency setup.
+- `python -m damru check-env` verifies Linux/WSL tools, Docker, binderfs, Chrome APKs, Redroid image state, and the Damru Playwright `crPage.js` patch.
+- `python -m damru install-deps` installs common Linux/WSL dependencies.
+- `python -m damru fix-wsl` retries safe Docker, binderfs, and netfilter fixes and reports missing WSL kernel modules clearly.
+- Optional visual commands exist for manual inspection: `screenshot`, `record`, `view`, and `install-viewer`.
+- On Windows, Docker/Redroid setup runs inside WSL with `wsl -u root`; native Windows Docker is not used.
 
-**What users need:**
+**Current commands:**
 ```bash
-# Should exist but doesn't:
-python -m damru setup          # One-command setup
-python -m damru check          # Verify all dependencies
-python -m damru pull-image     # Download/build image
-python -m damru test           # Quick smoke test
+python -m damru setup
+python -m damru check-env
+python -m damru install-deps
+python -m damru fix-wsl
+python -m damru bake-image
+python -m damru devices
+python -m damru screenshot
+python -m damru record
+python -m damru view
+python -m damru install-viewer
 ```
 
 ---
 
-### 🚨 4. No Dependency Management
+### 4. No Dependency Management
 
 **Missing checks for:**
-- ❌ ADB installed?
-- ❌ Python packages (playwright, etc.)?
-- ❌ Chrome APK availability?
-- ❌ WSL2 kernel version?
-- ❌ Sufficient disk space?
-- ❌ Network connectivity?
+-  ADB installed?
+-  Python packages (playwright, etc.)?
+-  Chrome APK availability?
+-  WSL2 kernel version? (partially covered by `check-env` and `fix-wsl` when Docker/netfilter modules are missing)
+-  Sufficient disk space?
+-  Network connectivity?
 
 ---
 
-### 🚨 5. No Image Auto-Pull on First Run
+### 5. No Image Auto-Pull on First Run
 
 **Current behavior:**
 1. User runs `AsyncDamru()`
-2. `ensure_container()` → `start_container()`
-3. `docker run damru-redroid:latest` ← Image doesn't exist!
+2. `ensure_container()` -> `start_container()`
+3. `docker run damru-redroid:latest`  Image doesn't exist!
 4. **CRASH**: `docker: Error response from daemon: No such image`
 
 **Should be:**
@@ -106,7 +114,7 @@ python -m damru test           # Quick smoke test
 
 ---
 
-## 📋 COMPREHENSIVE FIX PLAN
+## COMPREHENSIVE FIX PLAN
 
 ### Phase 1: Image Management (HIGH PRIORITY)
 
@@ -448,23 +456,23 @@ async def cmd_check(args):
     # Check Docker
     try:
         await docker.check_docker()
-        checks["docker"] = "✅ OK"
+        checks["docker"] = "OK"
     except Exception as e:
-        checks["docker"] = f"❌ FAIL: {e}"
+        checks["docker"] = f"FAIL: {e}"
 
     # Check image
     try:
         exists = await docker._images._image_exists("damru-redroid:latest")
-        checks["image"] = "✅ OK" if exists else "⚠️  Not found (run: damru pull-image)"
+        checks["image"] = "OK" if exists else "WARN: not found (run: damru pull-image)"
     except Exception as e:
-        checks["image"] = f"❌ FAIL: {e}"
+        checks["image"] = f"FAIL: {e}"
 
     # Check ADB
     try:
         out = await docker._run_cmd(["adb", "version"], timeout=5)
-        checks["adb"] = "✅ OK" if "Android Debug Bridge" in out else "❌ FAIL"
+        checks["adb"] = "OK" if "Android Debug Bridge" in out else "FAIL"
     except Exception:
-        checks["adb"] = "❌ Not installed"
+        checks["adb"] = "FAIL: not installed"
 
     # Print results
     print("\nDependency Check Results:")
@@ -472,11 +480,11 @@ async def cmd_check(args):
     for name, status in checks.items():
         print(f"  {name:20s} {status}")
 
-    all_ok = all("✅" in s for s in checks.values())
+    all_ok = all(s == "OK" for s in checks.values())
     if all_ok:
-        print("\n✅ All checks passed! Ready to use damru.")
+        print("\nAll checks passed! Ready to use damru.")
     else:
-        print("\n⚠️  Some checks failed. Run 'damru setup' to fix.")
+        print("\nSome checks failed. Run 'damru setup' to fix.")
         sys.exit(1)
 
 
@@ -809,22 +817,22 @@ class AsyncDamru:
 
 ---
 
-## 🎯 IMPLEMENTATION PRIORITY
+## IMPLEMENTATION PRIORITY
 
 ### Must Have (Phase 1-2):
-1. ✅ Image existence check + auto-pull
-2. ✅ Docker storage location configuration
+1.  Image existence check + auto-pull
+2.  Docker storage location configuration
 
 ### Should Have (Phase 3):
-3. ✅ Setup CLI (`damru setup`, `damru check`)
+3.  Setup CLI (`damru setup`, `damru check`)
 
 ### Nice to Have (Phase 4-5):
-4. ⏳ Health check system
-5. ⏳ Auto-setup on first run
+4.  Health check system
+5.  Auto-setup on first run
 
 ---
 
-## 📊 ESTIMATED EFFORT
+## ESTIMATED EFFORT
 
 | Phase | Time | Complexity |
 |-------|------|------------|
@@ -837,7 +845,7 @@ class AsyncDamru:
 
 ---
 
-## 🚀 NEXT STEPS
+## NEXT STEPS
 
 When ready to implement:
 1. Start with Phase 1 (image management) - highest impact
@@ -848,4 +856,3 @@ When ready to implement:
 ---
 
 **Status**: Document saved, awaiting user decision to proceed with implementation.
-

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Test: Random OS version + IP leak check (ipleak.net + whoer.net).
 
 Verifies:
@@ -42,7 +42,7 @@ async def goto_retry(page, url, retries=8, wait_until="domcontentloaded", timeou
 async def main():
     setup_logging(debug=False)
     serial = sys.argv[1] if len(sys.argv) > 1 else "localhost:5600"
-    proxy = sys.argv[2] if len(sys.argv) > 2 else "198.20.189.134:50000"
+    proxy = sys.argv[2] if len(sys.argv) > 2 else "proxy.example:50000"
 
     adb = ADB(serial=serial)
     await adb.ensure_server()

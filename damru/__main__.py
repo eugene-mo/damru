@@ -1,4 +1,4 @@
-"""Allow running damru benchmark via `python -m damru.benchmark`."""
-from .benchmark import main
+"""Run the Damru command line interface via `python -m damru`."""
+from .cli import main
 
-main()
+raise SystemExit(main())

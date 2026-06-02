@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
@@ -9,6 +9,12 @@
   [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
   [![Platform](https://img.shields.io/badge/Platform-WSL2%20%7C%20Linux-lightgrey.svg?style=for-the-badge&logo=linux&logoColor=white)]()
   [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-red.svg?style=for-the-badge)](https://polyformproject.org/licenses/noncommercial/1.0.0)
+
+  <p>
+    <strong>Community:</strong>
+    <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended
+    · <a href="https://t.me/TheCPAElite">Telegram personal</a>
+  </p>
 </div>
 
 <br/>
@@ -26,6 +32,7 @@
 - [Core Features](#core-features)
 - [Why Damru is Better](#why-damru-is-better-than-the-rest)
 - [Proof of Stealth: Benchmarks](#proof-of-stealth-benchmark-comparisons)
+- [Verification Proof](docs/PROOF.md)
 - [Architecture: The 8 Layers of Stealth](#architecture-the-8-layers-of-zero-js-stealth)
 - [Project Structure](#project-structure)
 - [Python API Documentation](docs/PYTHON_API.md)
@@ -89,7 +96,7 @@ The botting landscape is littered with tools that *used* to work: `puppeteer-ste
 | :--- | :--- | :--- |
 | **Spoofing Method** | **JavaScript Injection** (`Object.defineProperty`). Leaves massive detectable traces. | **Native Overrides**. Modifies C++ engine via CDP, patches binaries, edits OS props. |
 | **JS Leakage** | Anti-bots check `.toString()` on functions. Injected JS is caught instantly. | **Zero JS Injected**. Functions remain entirely native. |
-| **Hardware Emulation** | Fakes `navigator.hardwareConcurrency` via JS. Fails worker tests. | **C++ CDP Override**. Changes the value at the Chromium engine level. Passes all tests. |
+| **Hardware Emulation** | Fakes `navigator.hardwareConcurrency` via JS. Fails worker tests. | **C++ CDP Override**. Changes the main-page value at the Chromium engine level; worker targets are handled best-effort through CDP auto-attach. |
 | **GPU Fingerprint** | WebGL spoofing via JS wrapping. Leaks real GPU via extensions. | **Binary Patching**. Physically patches the `.so` Vulkan/GLES driver files on Android. |
 | **Physical Memory** | Fakes `deviceMemory` via JS. Easily caught by timing or syscall checks. | **Syscall Hooks**. Uses `libfakemem.so` to intercept `sysinfo` calls via `LD_PRELOAD`. |
 | **Worker Stealth** | Workers often leak the real hardware concurrency of the host. | **Worker Interception**. Uses CDP `Target.setAutoAttach` to force overrides on all Threads/Workers. |
@@ -101,6 +108,31 @@ The botting landscape is littered with tools that *used* to work: `puppeteer-ste
 ### Proof of Stealth: Benchmark Comparisons
 
 We regularly test Damru against the hardest anti-bot systems in the industry. These results are reproducible using the built-in benchmark suite (`python -m damru benchmark`) or the comprehensive functional test suite (`python example.py`).
+
+Fresh Ubuntu/WSL verification proof is tracked in [docs/PROOF.md](docs/PROOF.md). The current sanitized Ubuntu VPS proof assets include:
+
+- [Summary screenshot](docs/assets/proof/ubuntu-proof-summary.png)
+- [Android screen recording](docs/assets/proof/ubuntu-redroid-proof.mp4)
+- Individual site proof screenshots: [Amazon](docs/assets/proof/sites/amazon.png), [Foot Locker / DataDome target](docs/assets/proof/sites/datadome-footlocker.png), [Fingerprint Pro](docs/assets/proof/sites/fingerprint-pro.png), [Sannysoft](docs/assets/proof/sites/sannysoft.png), and [CreepJS](docs/assets/proof/sites/creepjs.png)
+- [Sanitized site proof metadata](docs/assets/proof/sites/proof-sites.json)
+
+<p align="center">
+  <img src="docs/assets/proof/ubuntu-proof-summary.png" alt="Damru Ubuntu VPS proof" width="720">
+</p>
+
+#### Screenshot Proof Gallery
+
+| Fingerprint Pro | CreepJS |
+| :---: | :---: |
+| <img src="docs/assets/proof/sites/fingerprint-pro.png" alt="Fingerprint Pro proof" width="360"> | <img src="docs/assets/proof/sites/creepjs.png" alt="CreepJS proof" width="360"> |
+
+| Sannysoft | Foot Locker / DataDome target |
+| :---: | :---: |
+| <img src="docs/assets/proof/sites/sannysoft.png" alt="Sannysoft proof" width="360"> | <img src="docs/assets/proof/sites/datadome-footlocker.png" alt="Foot Locker DataDome proof" width="360"> |
+
+| Amazon |
+| :---: |
+| <img src="docs/assets/proof/sites/amazon.png" alt="Amazon proof" width="520"> |
 
 | Target Anti-Bot | Standard Playwright | Typical Stealth Plugins | Damru |
 | :--- | :--- | :--- | :--- |
@@ -188,10 +220,26 @@ For the full list of available Android identities, see the:
 ## Download Custom OS Image
 
 > [!IMPORTANT]
-> The pre-baked Damru OS image is **2.3 GB**. Due to its size, it is hosted externally on Google Drive.
+> The pre-baked Damru Redroid image is a large Docker tarball and is not tracked in Git. Redroid is Linux-only: load or bake this image inside native Linux or WSL2, never native Windows Docker.
 
-**Download the latest image here:**
- **[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1na6YYHbpvDlaXhicg_nAKiaMFaYRN99U/view?usp=sharing)**
+Download the current pre-baked image:
+
+**[Download damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing)**
+
+Current local artifact prepared for release testing:
+
+```bash
+sha256sum -c damru-redroid-latest.tar.sha256
+docker load -i damru-redroid-latest.tar
+```
+
+If the tarball is missing, rebuild it on Linux/WSL:
+
+```bash
+python -m damru bake-image --image damru-redroid:latest
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
+```
 
 Once downloaded, follow **Step 3** in the Deployment Guide below to load it into Docker.
 
@@ -203,6 +251,22 @@ Ready to start? Damru uses **Redroid** (Android in Docker) to spin up headless m
 
 > [!IMPORTANT]
 > Redroid is Linux-only. On Windows, Docker and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
+
+### Minimum System Requirements
+
+Damru runs one full Android container per worker. The default Redroid worker limit is `2` CPU cores and `2g` memory per container (`REDROID_CPUS = 2.0`, `REDROID_MEMORY = "2g"`). Use these numbers for capacity planning:
+
+| Workload | CPU | RAM | Disk | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Bare minimum, 1 worker** | 2 vCPU | 4 GB host RAM | 15 GB free | Enough for install, Docker, one Redroid worker, and basic smoke tests. |
+| **Recommended, 1 worker** | 4 vCPU | 8 GB host RAM | 30 GB free | Better for high-resolution pages, proof captures, and fewer Chrome startup races. |
+| **Each additional worker** | +2 vCPU | +2-3 GB RAM | +5-8 GB free | Matches the default Docker worker limit plus image/container overhead. |
+| **Baking/exporting image** | 4 vCPU | 8 GB RAM | 20 GB temporary free | Needs room for base image, baked image layer, and exported `.tar`. |
+| **WSL2 recommended host** | 4+ vCPU | 8-16 GB RAM | 40+ GB free in WSL disk | WSL stores Docker layers inside the distro virtual disk unless you move Docker data-root. |
+
+For large pools, start with `max_devices=1`, run `python -m damru check-env`, then increase workers gradually. Redroid is CPU and disk-I/O heavy during boot; too many workers on a small VPS will look like browser instability.
+
+`DamruPool(max_devices > 1, mode="auto")` requires real binderfs support, not only `/dev/binder`, `/dev/hwbinder`, and `/dev/vndbinder` device nodes. If the kernel has `CONFIG_ANDROID_BINDERFS` disabled, one Redroid container may boot while a second container appears in ADB but fails Android userspace (`zygote`, `system_server`, WebView/CDP). Current Damru checks this before starting a multi-worker pool and tells the user to run `max_devices=1` or boot a binderfs-enabled kernel.
 
 ### Step 1: System Preparation (Linux / WSL2)
 
@@ -222,7 +286,17 @@ python -m damru check-env
 
 `install-deps` is idempotent: on a fresh WSL/Linux install it installs ADB, Docker, iptables, curl/wget/git/jq, mounts binderfs, and starts Docker. On later runs it reuses installed packages and rehydrates Docker/binderfs after WSL restarts.
 
+On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB through WSL. When Docker-published ADB ports are unreliable, Damru uses host networking and remaps each Redroid worker's `adbd` to a unique port (`5600`, `5601`, ...), so multi-worker pools can still run without native Windows Docker. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL prefers legacy iptables where available because some WSL kernels reject Docker's `addrtype` NAT rule through nft. See [WSL kernel notes](docs/WSL_KERNEL.md) and the latest [WSL fallback test results](docs/WSL_FALLBACK_TEST_RESULTS.md).
+
+Current validation on June 2, 2026. Full sanitized notes are in [Verification Proof](docs/PROOF.md):
+
+- WSL2 fresh-loop distro: `install-deps -y`, `fix-wsl`, `install-viewer -y`, `check-env --viewer`, single-worker browser smoke, and two-worker `DamruPool(mode="auto", max_devices=2)` passed.
+- Native Ubuntu VPS reset loop: Docker packages/state removed, fresh venv created, `install-deps -y`, `check-env --viewer`, unit tests, single-worker browser smoke, and two-worker pool smoke passed.
+- Both WSL and native Linux verified `https://example.com` in two concurrent Redroid workers with `navigator.hardwareConcurrency == 8`.
+
 ### Step 2: Install Docker & Enable Binderfs (Crucial for Redroid)
+
+Prefer `python -m damru install-deps`; it performs these package, Docker, binderfs, iptables, and Playwright-patch steps automatically. The manual commands below are only for debugging or custom Linux images.
 
 Redroid requires Docker and Android's `binderfs` kernel modules. 
 
@@ -243,19 +317,21 @@ Redroid requires Docker and Android's `binderfs` kernel modules.
 
 ### The Instant Custom OS Image
 
-Compiling native C binaries, injecting them via ADB, applying `iptables` rules, and installing Chrome on every run is a long process. **The Instant Solution:** We provide a pre-baked OS image ([damru-redroid-latest.tar](https://drive.google.com/file/d/1na6YYHbpvDlaXhicg_nAKiaMFaYRN99U/view?usp=sharing)) where all native patches, TTS engines, and specific Chrome APKs are **already baked in**. This turns a complex 5-minute setup into an instant plug-and-play boot!
+Compiling native C binaries, injecting them via ADB, applying `iptables` rules, and installing Chrome on every run is slow. The recommended path is a baked `damru-redroid:latest` Docker image exported as `damru-redroid-latest.tar`, where Chrome, native patches, fonts, TTS assets, and warm Chrome preferences are already installed. The tarball is intentionally ignored by Git because it is large; keep the checksum file with the release artifact.
 
 ### Step 3: Instant Boot with the Custom OS (Recommended)
 
 1.  **Load the pre-baked image**:
     
-    **For WSL2 Users:** (Assuming `.tar` is in your Windows Downloads folder)
+    **For WSL2 Users:** copy or mount the tarball inside your WSL distro, then run Docker from WSL:
     ```bash
-    docker load -i /mnt/c/Users/YourUsername/Downloads/damru-redroid-latest.tar
+    sha256sum -c damru-redroid-latest.tar.sha256
+    docker load -i damru-redroid-latest.tar
     ```
     
     **For Native Linux Users:**
     ```bash
+    sha256sum -c damru-redroid-latest.tar.sha256
     docker load -i damru-redroid-latest.tar
     ```
 
@@ -288,14 +364,14 @@ If your Redroid container fails to boot or Docker won't start in WSL, run these 
     ```
 *   **Docker Network Error** (`iptables` failure):
     ```bash
-    sudo update-alternatives --set iptables /usr/sbin/iptables-nft
-    sudo service docker restart
+    python -m damru fix-wsl
     ```
+    Damru selects a Docker-compatible iptables backend automatically. On some WSL kernels, Docker's `addrtype` NAT rule works with `iptables-legacy` but fails with `iptables-nft`.
 *   **Missing WSL Kernel Module** (`xt_addrtype not found`):
     ```bash
     python -m damru fix-wsl
     ```
-    If the module is still missing, boot a WSL2 kernel with Docker bridge/NAT and binderfs support. Damru cannot create missing kernel features from Python.
+    If the module is still missing, Damru tries its no-iptables/no-bridge Docker fallback. Windows auto mode uses WSL host networking with per-worker ADB port remapping for Redroid workers. For classic Docker bridge/NAT mode, boot a WSL2 kernel with Docker bridge/NAT and binderfs support.
 *   **Permission Denied**:
     ```bash
     sudo usermod -aG docker $USER
@@ -307,7 +383,7 @@ If your Redroid container fails to boot or Docker won't start in WSL, run these 
 
 > An ADB serial is a unique identifier for your Android device. 
 > - For **Redroid/Docker**, it is usually the network address: `localhost:5555` or an internal IP.
-> - For **Physical Devices**, it is a hardware string like `9889d6444b49` (visible via `adb devices`).
+> - Physical-device serials may appear in `adb devices`, but Damru does not support physical phones as automation targets.
 
 ### Step 4: Install Damru
 
@@ -340,15 +416,14 @@ python -m damru setup -y --wsl-distro Ubuntu --wsl-username your-wsl-user
 
 #### Windows Installation Fix (Important)
 
-If you are using Windows (especially Python 3.10) and encounter an `AssertionError: ...distutils\core.py` during `pip install`, you must force standard distutils. Run this in your terminal *before* installing:
+If you are using an older Windows Python/setuptools combination and encounter an `AssertionError: ...distutils\core.py` during `pip install`, upgrade packaging tools first:
 
 ```powershell
-# PowerShell (Run this first!)
-$env:SETUPTOOLS_USE_DISTUTILS="stdlib"
-
-# Then run:
+python -m pip install -U pip setuptools wheel
 pip install git+https://github.com/akwin1234/damru.git
 ```
+
+Do not set `SETUPTOOLS_USE_DISTUTILS=stdlib` globally on modern Python. It can break editable builds on Python 3.14 and newer.
 
 **Option B: Clone & Install (For Developers)**
 ```bash
@@ -361,7 +436,7 @@ playwright install
 python -m damru setup --skip-deps
 ```
 
-*(Magic Note: When you import Damru, it automatically patches Playwright's source code (`crPage.js`) on your system to prevent CDP target discovery leaks!)*
+When you import Damru, it verifies and applies the bundled Playwright `crPage.js` patch used to reduce CDP target discovery leaks.
 
 ### CLI Commands
 
@@ -370,6 +445,7 @@ python -m damru setup           # guided first-run setup and config writer
 python -m damru check-env       # validate Linux/WSL dependencies and assets
 python -m damru install-deps    # install common Linux/WSL dependencies
 python -m damru fix-wsl         # retry safe WSL Docker/binderfs/netfilter fixes
+python -m damru wsl-kernel status # inspect bundled/active WSL kernel state
 python -m damru benchmark       # run the benchmark command
 python -m damru bake-image      # bake a warm Redroid image
 python -m damru devices         # list ADB devices from Linux/WSL
@@ -378,6 +454,10 @@ python -m damru record          # capture Android display MP4 through ADB
 python -m damru view            # open optional scrcpy live viewer
 python -m damru install-viewer  # check/install optional scrcpy tooling
 ```
+
+For testing a separate WSL distro without changing `config.py`, set `DAMRU_WSL_DISTRO`, for example: `$env:DAMRU_WSL_DISTRO="DamruFreshKernelTest"`. Do not run host-network Redroid workers in multiple WSL distros at the same time; `check-env` reports this conflict.
+
+> **WSL custom kernel safety:** On Windows, Damru recommends using a fresh/dedicated WSL distro for Redroid. The bundled kernel installer edits `%USERPROFILE%\.wslconfig`, which changes how WSL boots. Damru backs up `.wslconfig`, but a custom WSL kernel can still break Docker/networking/modules or other WSL workloads. Interactive installs require typing the full warning phrase; scripted installs require `--confirm-wsl-kernel-risk` in addition to `--yes`. Native Linux/Ubuntu does not use this WSL kernel installer.
 
 On Windows, `install-deps` runs inside WSL as root and does not use native Windows Docker. On native Linux scripted setup where sudo cannot prompt interactively, pass one password line on stdin:
 
@@ -428,6 +508,19 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    REDROID_IMAGE = "damru-redroid:latest"  # The Docker image to use
    ```
 
+4. **Proxy, Timezone, and Locale**:
+Leave `TIMEZONE` and `LOCALE` as `None` unless you intentionally need fixed values. Damru resolves the active proxy exit at session start, then applies matching Android timezone, Chrome timezone, `Accept-Language`, and `Intl` locale. Rotating residential proxies are rechecked through Chrome after CDP connects so the browser does not keep a stale timezone from a previous exit.
+
+Auto locale selection covers standard ISO country codes plus CLDR exceptional territory codes. Countries with more than one realistic phone/browser language can rotate between valid local variants, for example `en-PH` / `fil-PH` or `en-IN` / `hi-IN`.
+   ```python
+   PROXY = None        # Optional: SOCKS5/HTTP proxy URL for Python-side checks
+   HTTP_PROXY = None   # Optional: Android system HTTP proxy as host:port
+   TIMEZONE = None     # Auto from proxy exit when unset
+   LOCALE = None       # Auto from proxy country when unset
+   ```
+
+   If your upstream proxy is SOCKS5 but Android needs an HTTP CONNECT proxy, run or provide a local HTTP bridge and pass it as `http_proxy` in code or `HTTP_PROXY` in config.
+
 ### Docker Storage Location (Crucial for Windows Users)
 Redroid containers consume significant disk space. If you are using WSL2 Docker, it saves data to your `ext4.vhdx` virtual drive on the `C:` drive by default, which can quickly fill up your primary SSD.
 
@@ -456,8 +549,8 @@ from damru import AsyncDamru
 async def main():
     print("Launching Damru...")
     
-    # device="random" picks from our database of 49 real Android devices.
-    # proxy is used to auto-resolve Timezone and Locale!
+    # device="random" picks from 49 real Android device profiles.
+    # Leave timezone/locale unset so Damru follows the active proxy exit.
     async with AsyncDamru(
         device="random", 
         proxy="socks5://your.proxy.ip:1080",
@@ -475,6 +568,24 @@ async def main():
 
 asyncio.run(main())
 ```
+
+### Example 1b: Authenticated Proxy with Android HTTP Bridge
+
+Android system proxy supports HTTP CONNECT. If your provider gives SOCKS5 for Python-side checks but Android Chrome must use a local HTTP bridge, pass both values:
+
+```python
+from damru import AsyncDamru
+
+async with AsyncDamru(
+    device="pixel_8_pro",
+    proxy="socks5://user:pass@proxy.example:824",
+    http_proxy="172.17.0.1:18888",
+) as browser:
+    page = await browser.new_page()
+    await page.goto("https://demo.fingerprint.com/playground")
+```
+
+Damru resolves timezone and locale through `http_proxy` because that is the route Chrome actually uses. Do not set `timezone` or `locale` manually unless they match the current proxy exit.
 
 ### Example 2: Synchronous Usage
 
@@ -508,11 +619,12 @@ proxies = [
     "socks5://proxy3:1080"
 ]
 
-with DamruPoolSync(size=3, proxy_list=proxies) as pool:
-    for i, context in enumerate(pool.get_contexts()):
-        page = context.new_page()
-        page.goto("https://example.com/api/scrape_target")
-        print(f"Worker {i} finished scraping: {page.title()}")
+with DamruPoolSync(mode="auto", max_devices=3, proxies=proxies) as pool:
+    for i in range(3):
+        with pool.session() as context:
+            page = context.new_page()
+            page.goto("https://example.com/api/scrape_target")
+            print(f"Worker {i} finished scraping: {page.title()}")
 ```
 
 ---
@@ -538,8 +650,8 @@ We are aggressively building Damru into a fully autonomous infrastructure tool. 
 *   [x] **`damru setup` CLI**: Single-command configuration plus Linux/WSL dependency setup.
 *   [x] **Automated Health Checks**: Verification of ADB, Docker, binderfs, Chrome APKs, and Playwright patches.
 *   [x] **Manual Viewer Tools**: Optional screenshots, video recording, and scrcpy live viewer.
-*   [] **Auto Image Management**: Damru will dynamically bake "Damru-Ready" Docker images natively.
-*   [] **Mass Orchestration**: Expanding `DamruPool` for Kubernetes/Swarm deployment.
+*   [ ] **Auto Image Management**: Damru will dynamically bake "Damru-Ready" Docker images natively.
+*   [ ] **Mass Orchestration**: Expanding `DamruPool` for Kubernetes/Swarm deployment.
 
 ---
 
@@ -552,7 +664,7 @@ We are aggressively building Damru into a fully autonomous infrastructure tool. 
 MuMu Player support is currently an **experimental, unfinished, and non-functional beta feature**. While the code structure for it exists, we highly recommend using **Redroid (Docker)** for any production or serious research work.
 
 ### 3. Why is the .tar image so large?
-The `damru-redroid-latest.tar` image (2.3 GB) is a full Android 14 operating system. It includes pre-installed Chrome, 30+ TTS voices, custom fonts, and pre-patched binary drivers to ensure instant deployment and maximum stealth.
+The `damru-redroid-latest.tar` image is a full Android 14 operating system export. The current test artifact is about 915 MB as a Docker tarball and expands to a larger Docker image after `docker load`. It includes pre-installed Chrome, TTS assets, custom fonts, and pre-patched binary drivers for faster deployment.
 
 ### 4. Does Damru work on native Linux?
 **Yes.** Any Docker image built in WSL2 is a standard Linux image. Damru works perfectly on native Linux (Ubuntu, Debian, etc.), provided the `binder` kernel modules are loaded.
@@ -562,7 +674,7 @@ Standard stealth tools are caught by anti-bots because their JavaScript injectio
 
 ---
 
-## 🙏 Acknowledgments & Credits
+## ðŸ™ Acknowledgments & Credits
 
 Damru is built on the shoulders of giants. We would like to credit the following projects and technologies that make this framework possible:
 

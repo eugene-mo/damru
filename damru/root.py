@@ -48,6 +48,7 @@ _DEVICE_RESETPROP = "/data/local/tmp/resetprop"
 # Memory spoof paths on device
 _FAKEMEM_SO = "/data/local/tmp/libfakemem.so"
 _FAKEMEM_TARGET = "/data/local/tmp/damru_fakemem_gb"
+_FAKEMEM_WRAP = "/data/local/tmp/damru_chrome_wrap.sh"
 _APP_PROCESS_REAL = "/system/bin/app_process64.real"
 
 # NikGapps GoogleTTS addon (Android 14) direct mirror URL (no JS challenge).
@@ -415,6 +416,22 @@ class RootOps:
 
         Idempotent: checks if rule already exists before applying.
         """
+        # Some WSL fallback kernels can boot Redroid but do not expose the
+        # Android iptables filter table. In that case Chrome prefs/CDP still
+        # constrain WebRTC, but kernel-level UDP blocking is unavailable.
+        iptables_check = await self.adb.shell(
+            "su 0 iptables -L OUTPUT -n 2>&1",
+            timeout=5,
+            allow_failure=True,
+        )
+        if self._iptables_unavailable(iptables_check):
+            logger.warning(
+                "Android iptables unavailable; skipping kernel WebRTC UDP block. "
+                "Chrome WebRTC policy remains active, but kernel-level leak "
+                "protection is degraded on this kernel."
+            )
+            return
+
         # Resolve Chrome's UID (u0_aNN = 10000 + NN)
         owner_info = await self.adb.shell(
             f"stat -c '%U' /data/data/{chrome_package} 2>/dev/null",
@@ -464,8 +481,38 @@ class RootOps:
             "iptables -I OUTPUT -p tcp --dport 5349 -j DROP",
         ]
         for rule in rules:
-            await self.adb.shell_root(rule)
+            try:
+                result = await self.adb.shell_root(f"{rule} 2>&1")
+            except Exception as exc:
+                logger.warning(
+                    "Android iptables rule failed; continuing without full "
+                    "kernel WebRTC UDP block: %s",
+                    exc,
+                )
+                return
+            if self._iptables_unavailable(result):
+                logger.warning(
+                    "Android iptables unavailable; continuing without full "
+                    "kernel WebRTC UDP block: %s",
+                    result.strip(),
+                )
+                return
         logger.info("WebRTC blocked via port-based iptables (high-port UDP range + TCP STUN)")
+
+    @staticmethod
+    def _iptables_unavailable(output: str) -> bool:
+        """Return True when Android iptables cannot use kernel filter tables."""
+        text = (output or "").lower()
+        return any(
+            marker in text
+            for marker in (
+                "can't initialize iptables table",
+                "table does not exist",
+                "no chain/target/match by that name",
+                "protocol not supported",
+                "operation not supported",
+            )
+        )
 
     async def remove_webrtc_block(self, chrome_package: str = "com.android.chrome") -> None:
         """Remove iptables WebRTC blocking rules (best-effort cleanup)."""
@@ -1588,6 +1635,29 @@ class RootOps:
                 ],
                 capture_output=True, text=True, timeout=30,
             )
+            if result.returncode != 0:
+                clang_candidates = [
+                    r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\Llvm\x64\bin\clang.exe",
+                    r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\Llvm\bin\clang.exe",
+                    r"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\Llvm\x64\bin\clang.exe",
+                    r"C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\Llvm\bin\clang.exe",
+                ]
+                clang = next((p for p in clang_candidates if os.path.isfile(p)), None)
+                if clang:
+                    result = subprocess.run(
+                        [
+                            clang,
+                            "--target=x86_64-linux-android",
+                            "-shared",
+                            "-fPIC",
+                            "-nostdlib",
+                            "-fno-stack-protector",
+                            "-Wl,-soname,libfakemem.so",
+                            "-o", so_path,
+                            c_path,
+                        ],
+                        capture_output=True, text=True, timeout=30,
+                    )
         else:
             result = subprocess.run(
                 [
@@ -1631,15 +1701,15 @@ class RootOps:
         await self.adb.shell_root(f"echo {target_int} > {_FAKEMEM_TARGET}")
         logger.debug("Memory spoof target: %d GB", target_int)
 
-    async def setup_memory_preload(self) -> None:
-        """Replace app_process64 with LD_PRELOAD wrapper, restart Zygote.
+    async def setup_memory_preload(self, chrome_package: str = "com.android.chrome") -> None:
+        """Enable per-Chrome LD_PRELOAD memory spoofing.
 
-        One-time operation per container boot. Takes ~15s for Zygote restart.
-        After this, ALL forked processes (including Chrome renderers) get
-        the fake sysinfo because Zygote loads the .so via LD_PRELOAD and
-        children inherit the loaded library through fork().
+        Prefer Android's ``wrap.<package>`` property over replacing
+        ``app_process64`` globally. The older global wrapper affects zygote and
+        system processes and can destabilize ADB/Android after a live restart.
         """
-        if await self.is_memory_preload_active():
+        await self._restore_global_memory_preload_if_needed()
+        if await self.is_memory_preload_active(chrome_package):
             logger.debug("Memory preload already active")
             return
 
@@ -1653,59 +1723,56 @@ class RootOps:
             await self.adb.push(so_local, _FAKEMEM_SO)
             await self.adb.shell_root(f"chmod 755 {_FAKEMEM_SO}")
 
-        # Remount /system rw (try both mount points)
-        await self.adb.shell_root("mount -o remount,rw /system 2>/dev/null")
-        await self.adb.shell_root("mount -o remount,rw / 2>/dev/null")
-
-        # Backup original app_process64
-        await self.adb.shell_root(f"cp /system/bin/app_process64 {_APP_PROCESS_REAL}")
-        await self.adb.shell_root(f"chmod 755 {_APP_PROCESS_REAL}")
-
-        # Write wrapper to temporary file first, then move atomically.
-        # This bypasses 'Text file busy' errors if Zygote is actively running.
-        tmp_wrapper = "/data/local/tmp/app_process64.wrapper"
         wrapper = (
             "#!/system/bin/sh\n"
             f"export LD_PRELOAD={_FAKEMEM_SO}\n"
-            f'exec {_APP_PROCESS_REAL} "$@"\n'
+            "exec \"$@\"\n"
         )
         b64 = base64.b64encode(wrapper.encode()).decode()
-        await self.adb.shell_root(f"echo '{b64}' | base64 -d > {tmp_wrapper}")
-        await self.adb.shell_root(f"chmod 755 {tmp_wrapper}")
-
-        # Atomic move to replace real binary
-        await self.adb.shell_root(f"mv -f {tmp_wrapper} /system/bin/app_process64")
-        await self.adb.shell_root("chmod 755 /system/bin/app_process64")
-
-        # Copy SELinux context from real binary (best-effort)
-        await self.adb.shell_root(
-            "chcon u:object_r:zygote_exec:s0 /system/bin/app_process64 2>/dev/null",
+        await self.adb.shell_root(f"echo '{b64}' | base64 -d > {_FAKEMEM_WRAP}")
+        await self.adb.shell_root(f"chmod 755 {_FAKEMEM_WRAP}")
+        await self.adb.shell_root(f"setprop wrap.{chrome_package} {_FAKEMEM_WRAP}")
+        value = await self.adb.shell(
+            f"getprop wrap.{chrome_package}", timeout=5, allow_failure=True,
         )
+        if _FAKEMEM_WRAP not in value:
+            raise RootError(f"Failed to set wrap.{chrome_package} for memory preload")
+        logger.info("Memory preload active for %s via Android wrap property", chrome_package)
 
-        # Restart Zygote â€” kills all apps, SystemServer restarts
-        logger.info("Restarting Zygote with LD_PRELOAD (takes ~15s)...")
-        await self.adb.shell_root("stop zygote")
-        await sleep(2.0)
-        await self.adb.shell_root("start zygote")
-
-        # Wait for system to stabilize (PackageManager = SystemServer is up)
-        await self._wait_for_system(timeout=30)
-        logger.info("Memory preload active â€” all processes use fake sysinfo")
-
-    async def remove_memory_preload(self) -> None:
+    async def remove_memory_preload(self, chrome_package: str = "com.android.chrome") -> None:
         """Restore original app_process64 (best-effort cleanup)."""
-        if not await self.is_memory_preload_active():
+        await self.adb.shell_root(f"setprop wrap.{chrome_package} ''")
+        await self._restore_global_memory_preload_if_needed()
+
+    async def _restore_global_memory_preload_if_needed(self) -> None:
+        """Undo older app_process64 wrapper installs if present."""
+        out = await self.adb.shell(
+            f"test -f {_APP_PROCESS_REAL} && echo OK",
+            timeout=5,
+            allow_failure=True,
+        )
+        if "OK" not in out:
             return
 
-        await self.adb.shell_root("mount -o remount,rw /system 2>/dev/null")
-        await self.adb.shell_root("mount -o remount,rw / 2>/dev/null")
+        await self.adb.shell(
+            "su 0 sh -c 'mount -o remount,rw /system 2>/dev/null || true; "
+            "mount -o remount,rw / 2>/dev/null || true'",
+            timeout=10,
+            allow_failure=True,
+        )
         await self.adb.shell_root(f"cp {_APP_PROCESS_REAL} /system/bin/app_process64")
         await self.adb.shell_root(f"rm -f {_APP_PROCESS_REAL}")
-        await self.adb.shell_root(f"rm -f {_FAKEMEM_SO} {_FAKEMEM_TARGET}")
-        logger.info("Memory preload removed")
+        logger.info("Removed legacy global app_process64 memory preload wrapper")
 
-    async def is_memory_preload_active(self) -> bool:
-        """Check if the Zygote wrapper with LD_PRELOAD is in place."""
+    async def is_memory_preload_active(self, chrome_package: str = "com.android.chrome") -> bool:
+        """Check if Chrome's wrap property points at libfakemem."""
+        value = await self.adb.shell(
+            f"getprop wrap.{chrome_package}", timeout=5, allow_failure=True,
+        )
+        if _FAKEMEM_SO in value:
+            return True
+        if _FAKEMEM_WRAP in value:
+            return True
         out = await self.adb.shell(
             f"test -f {_APP_PROCESS_REAL} && echo OK",
             timeout=5, allow_failure=True,
@@ -1901,20 +1968,24 @@ class RootOps:
 
         modified = original.replace("</familyset>", f"{xml_additions}</familyset>")
 
-        # Write to device
-        tmp_local = os.path.join(tempfile.gettempdir(), "damru_fonts.xml")
-        with open(tmp_local, "w", encoding="utf-8") as f:
-            f.write(modified)
-        await self.adb.shell(
-            "su 0 mount -o remount,rw /system 2>/dev/null", allow_failure=True,
-        )
-        await self.adb.push(tmp_local, "/data/local/tmp/damru_fonts.xml")
-        await self.adb.shell_root(
-            f"cp /data/local/tmp/damru_fonts.xml {_FONTS_XML}"
-        )
-        await self.adb.shell_root(f"chmod 644 {_FONTS_XML}")
-        await self.adb.shell_root("rm -f /data/local/tmp/damru_fonts.xml")
-        os.remove(tmp_local)
+        fd, tmp_local = tempfile.mkstemp(prefix="damru_fonts_", suffix=".xml")
+        os.close(fd)
+        tmp_remote = f"/data/local/tmp/damru_fonts_{os.path.basename(tmp_local)}"
+        try:
+            with open(tmp_local, "w", encoding="utf-8") as f:
+                f.write(modified)
+            await self.adb.shell(
+                "su 0 mount -o remount,rw /system 2>/dev/null", allow_failure=True,
+            )
+            await self.adb.push(tmp_local, tmp_remote)
+            await self.adb.shell_root(f"cp {tmp_remote} {_FONTS_XML}")
+            await self.adb.shell_root(f"chmod 644 {_FONTS_XML}")
+        finally:
+            await self.adb.shell_root(f"rm -f {tmp_remote}")
+            try:
+                os.remove(tmp_local)
+            except OSError:
+                pass
         await self.adb.shell(
             "su 0 mount -o remount,ro /system 2>/dev/null", allow_failure=True,
         )

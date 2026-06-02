@@ -26,7 +26,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Marker string present in our patched crPage.js -- used for quick detection.
-_PATCH_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME"
+_PATCH_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME_DAMRU_DYNAMIC_V2"
+_ENV_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME"
 
 # Location of the bundled (already-patched) crPage.js shipped with damru.
 _BUNDLED_CRPAGE = Path(__file__).parent / "crPage.js"
@@ -64,6 +65,16 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _read_text(path: Path) -> str:
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def _write_text(path: Path, text: str) -> None:
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
 def _is_patched(path: Path) -> bool:
     """Check whether the file at *path* already contains our patch marker."""
     try:
@@ -75,6 +86,52 @@ def _is_patched(path: Path) -> bool:
         return False
     except Exception:
         return False
+
+
+def _patch_text(source: str) -> str:
+    """Patch the installed Playwright file while preserving its version shape."""
+    runtime_enable = 'this._client.send("Runtime.enable", {}),'
+    replacement = (
+        f'(process.env.{_ENV_MARKER} ? '
+        'this._client.send("Runtime.enable", {}).then(() => { '
+        f'/* {_PATCH_MARKER} */ '
+        'this._stealthDisableTimer = setTimeout(() => { '
+        'this._client.send("Runtime.disable", {}).catch(() => {}); '
+        '}, 100); }) : this._client.send("Runtime.enable", {})),'
+    )
+    if _PATCH_MARKER in source:
+        return source
+    if runtime_enable not in source:
+        raise RuntimeError("Playwright crPage.js Runtime.enable hook point not found")
+    patched = source.replace(runtime_enable, replacement, 1)
+
+    frame_nav = (
+        'this._page.frameManager.frameCommittedNewDocumentNavigation('
+        'framePayload.id, framePayload.url + (framePayload.urlFragment || ""), '
+        'framePayload.name || "", framePayload.loaderId, initial);'
+    )
+    frame_nav_patch = (
+        f'if (process.env.{_ENV_MARKER}) {{ clearTimeout(this._stealthDisableTimer); '
+        'this._client.send("Runtime.enable", {}).catch(() => {}); }\n    '
+        + frame_nav
+    )
+    if frame_nav in patched:
+        patched = patched.replace(frame_nav, frame_nav_patch, 1)
+
+    context_created = (
+        'const frame = contextPayload.auxData ? '
+        'this._page.frameManager.frame(contextPayload.auxData.frameId) : null;'
+    )
+    context_created_patch = (
+        f'if (process.env.{_ENV_MARKER}) {{ clearTimeout(this._stealthDisableTimer); '
+        'this._stealthDisableTimer = setTimeout(() => { '
+        'this._client.send("Runtime.disable", {}).catch(() => {}); }, 10); }\n    '
+        + context_created
+    )
+    if context_created in patched:
+        patched = patched.replace(context_created, context_created_patch, 1)
+
+    return patched
 
 
 def ensure_patched() -> bool:
@@ -94,17 +151,14 @@ def ensure_patched() -> bool:
     if target is None:
         return False
 
-    # Fast path: already patched.
+    # Fast path: already patched by the current in-place patcher.
     if _is_patched(target):
         logger.debug("Playwright crPage.js already patched -- skipping")
         return True
 
-    # Content comparison: avoid unnecessary writes.
-    if _sha256(target) == _sha256(_BUNDLED_CRPAGE):
-        logger.debug("Playwright crPage.js matches bundled version (hash match)")
-        return True
-
-    # Apply the patch by copying our bundled version over the installed one.
+    # Apply the patch to the installed Playwright file. Older Damru builds copied
+    # a full bundled crPage.js, which can drift from Playwright internals. If that
+    # old patch is present and a backup exists, start from the backup first.
     try:
         # Create a backup of the original (just in case), but don't fail on it.
         backup = target.with_suffix(".js.damru_backup")
@@ -115,7 +169,13 @@ def ensure_patched() -> bool:
             except Exception as exc:
                 logger.debug("Could not create backup: %s", exc)
 
-        shutil.copy2(_BUNDLED_CRPAGE, target)
+        source_path = target
+        target_text = _read_text(target)
+        if _ENV_MARKER in target_text and _PATCH_MARKER not in target_text and backup.exists():
+            source_path = backup
+
+        patched = _patch_text(_read_text(source_path))
+        _write_text(target, patched)
         logger.info("Applied damru stealth patch to %s", target)
         return True
     except PermissionError:

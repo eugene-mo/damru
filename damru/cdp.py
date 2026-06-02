@@ -6,12 +6,15 @@ then using Playwright's connect_over_cdp().
 """
 from __future__ import annotations
 
+import asyncio
+from urllib.error import URLError
+from urllib.request import urlopen
 from typing import Optional
 
 from playwright.async_api import Browser, BrowserContext, async_playwright
 
 from .adb import ADB
-from .utils import async_retry, find_free_port, logger, sleep
+from .utils import find_free_port, logger, sleep
 
 
 class CDPError(Exception):
@@ -44,16 +47,50 @@ class CDPConnection:
         logger.debug("Port forward: localhost:%d -> chrome_devtools_remote", port)
         return port
 
-    @async_retry(retries=3, delay=2.0)
+    async def _endpoint_ready(self, port: int) -> bool:
+        """Return True when Chrome's DevTools HTTP endpoint responds."""
+        def _probe() -> bool:
+            try:
+                with urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2) as resp:
+                    return resp.status == 200 and b"webSocketDebuggerUrl" in resp.read(4096)
+            except (OSError, URLError):
+                return False
+
+        return await asyncio.to_thread(_probe)
+
     async def _try_connect(self, port: int) -> Browser:
-        """Attempt CDP connection with retry."""
-        pw = await async_playwright().start()
-        self._pw_instance = pw
-        browser = await pw.chromium.connect_over_cdp(
-            f"http://127.0.0.1:{port}",
-            timeout=10000,
-        )
-        return browser
+        """Attempt CDP connection with retry.
+
+        Chrome on Android can create chrome_devtools_remote before the HTTP/CDP
+        endpoint is fully ready. That shows up as intermittent socket hangups
+        during concurrent pool cold starts, so probe the endpoint first and
+        cleanly tear down failed Playwright instances before retrying.
+        """
+        last_err: Exception | None = None
+        for attempt in range(8):
+            if not await self._endpoint_ready(port):
+                await sleep(1.5)
+                continue
+
+            pw = await async_playwright().start()
+            try:
+                browser = await pw.chromium.connect_over_cdp(
+                    f"http://127.0.0.1:{port}",
+                    timeout=15000,
+                )
+                self._pw_instance = pw
+                return browser
+            except Exception as exc:
+                last_err = exc
+                try:
+                    await pw.stop()
+                except Exception:
+                    pass
+                await sleep(2.0 + attempt)
+
+        if last_err:
+            raise last_err
+        raise CDPError(f"Chrome DevTools endpoint did not become ready on port {port}")
 
     async def connect(self) -> BrowserContext:
         """Connect to Chrome via CDP and return the browser context.

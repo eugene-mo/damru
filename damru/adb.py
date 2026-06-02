@@ -5,7 +5,11 @@ All Android Debug Bridge interaction goes through this module.
 from __future__ import annotations
 
 import asyncio
+import base64
+import os
+import sys
 import re
+from pathlib import PureWindowsPath
 from typing import Any, Dict, List, Optional
 
 from .utils import logger
@@ -21,6 +25,73 @@ class ADB:
     def __init__(self, serial: Optional[str] = None):
         self.serial = serial
 
+    @staticmethod
+    def _is_wsl_serial(serial: Optional[str]) -> bool:
+        return bool(serial and serial.startswith("wsl:"))
+
+    @staticmethod
+    def _plain_serial(serial: str) -> str:
+        return serial[4:] if serial.startswith("wsl:") else serial
+
+    @staticmethod
+    def _wsl_distro() -> str:
+        env_distro = os.environ.get("DAMRU_WSL_DISTRO")
+        if env_distro:
+            return env_distro
+        try:
+            from .config import WSL_DISTRO
+
+            return WSL_DISTRO
+        except Exception:
+            return "Ubuntu"
+
+    @staticmethod
+    def _to_wsl_path(value: str) -> str:
+        if re.match(r"^[A-Za-z]:[\\/]", value):
+            p = PureWindowsPath(value)
+            drive = p.drive.rstrip(":").lower()
+            rest = "/".join(p.parts[1:])
+            return f"/mnt/{drive}/{rest}"
+        return value
+
+    @classmethod
+    def _translate_wsl_file_args(cls, args: List[str]) -> List[str]:
+        if not args:
+            return args
+        translated = list(args)
+        if translated[0] == "push" and len(translated) >= 3:
+            translated[1] = cls._to_wsl_path(translated[1])
+        elif translated[0] == "pull" and len(translated) >= 3:
+            translated[2] = cls._to_wsl_path(translated[2])
+        elif translated[0] in {"install", "install-multiple", "install-multi-package"}:
+            translated = [cls._to_wsl_path(part) for part in translated]
+        return translated
+
+    def _build_cmd(self, args: List[str]) -> List[str]:
+        """Build an adb command, routing explicit wsl: serials through WSL."""
+        serial = self.serial
+        routed_args = list(args)
+
+        # ADB()._run(["connect", "wsl:IP:PORT"]) is used by pool cleanup and
+        # reconnect paths. Route those through WSL even though self.serial is None.
+        if not serial and routed_args and routed_args[0] in {"connect", "disconnect"}:
+            if len(routed_args) > 1 and self._is_wsl_serial(routed_args[1]):
+                target = self._plain_serial(routed_args[1])
+                routed_args[1] = target
+                return ["wsl", "-d", self._wsl_distro(), "--", "adb", *routed_args]
+
+        base = ["adb"]
+        if serial:
+            plain_serial = self._plain_serial(serial)
+            base.extend(["-s", plain_serial])
+        if sys.platform == "win32" and self._is_wsl_serial(serial):
+            routed_args = self._translate_wsl_file_args(routed_args)
+        base.extend(routed_args)
+
+        if sys.platform == "win32" and self._is_wsl_serial(serial):
+            return ["wsl", "-d", self._wsl_distro(), "--", *base]
+        return base
+
     async def _run(
         self,
         args: List[str],
@@ -28,10 +99,7 @@ class ADB:
         allow_failure: bool = False,
     ) -> str:
         """Run an adb command and return stdout."""
-        cmd = ["adb"]
-        if self.serial:
-            cmd.extend(["-s", self.serial])
-        cmd.extend(args)
+        cmd = self._build_cmd(args)
 
         logger.debug("adb: %s", " ".join(cmd))
 
@@ -72,17 +140,22 @@ class ADB:
         if not transport_bad:
             transport_bad = (
                 bool(self.serial)
-                and ("device offline" in low or "device not found" in low or "no devices/emulators found" in low)
+                and (
+                    "device offline" in low
+                    or "device not found" in low
+                    or "not found" in low
+                    or "no devices/emulators found" in low
+                )
             )
 
         if transport_bad and args and args[0] not in {"connect", "disconnect", "start-server", "kill-server", "devices"}:
             reconnect_timeout = min(max(timeout, 5.0), 15.0)
             try:
-                await _exec(["adb", "disconnect", self.serial], reconnect_timeout)
+                await _exec(ADB()._build_cmd(["disconnect", self.serial]), reconnect_timeout)
             except Exception:
                 pass
             try:
-                await _exec(["adb", "connect", self.serial], reconnect_timeout)
+                await _exec(ADB()._build_cmd(["connect", self.serial]), reconnect_timeout)
             except Exception:
                 pass
             await asyncio.sleep(0.3)
@@ -122,21 +195,25 @@ class ADB:
         """
         method = getattr(self, "_root_method", None)
 
+        def _encoded_script(cmd: str) -> str:
+            payload = base64.b64encode(cmd.encode("utf-8")).decode("ascii")
+            return f"echo {payload} | base64 -d | sh"
+
         if method == "direct":
-            return await self._run(["shell", command], timeout=timeout)
+            return await self._run(["shell", _encoded_script(command)], timeout=timeout)
         elif method == "su_c":
-            escaped = command.replace("'", "'\"'\"'")
+            escaped = _encoded_script(command).replace("'", "'\"'\"'")
             return await self._run(
                 ["shell", f"su -c '{escaped}'"], timeout=timeout
             )
         elif method == "su_0":
-            escaped = command.replace("'", "'\"'\"'")
+            escaped = _encoded_script(command).replace("'", "'\"'\"'")
             return await self._run(
                 ["shell", f"su 0 sh -c '{escaped}'"], timeout=timeout
             )
 
         # Not yet detected — try each method
-        escaped = command.replace("'", "'\"'\"'")
+        escaped = _encoded_script(command).replace("'", "'\"'\"'")
         try:
             return await self._run(
                 ["shell", f"su -c '{escaped}'"], timeout=timeout
@@ -144,7 +221,7 @@ class ADB:
         except ADBError:
             pass
         try:
-            escaped = command.replace("'", "'\"'\"'")
+            escaped = _encoded_script(command).replace("'", "'\"'\"'")
             return await self._run(
                 ["shell", f"su 0 sh -c '{escaped}'"], timeout=timeout
             )
@@ -198,6 +275,8 @@ class ADB:
     async def ensure_server(self) -> None:
         """Start ADB server if not running."""
         await self._run(["start-server"], timeout=10, allow_failure=True)
+        if self._is_wsl_serial(self.serial):
+            await ADB()._run(["connect", self.serial], timeout=10, allow_failure=True)
 
     # ---- Properties ----
 

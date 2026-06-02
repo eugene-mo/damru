@@ -1,4 +1,4 @@
-"""Extract full fingerprint.com/demo report."""
+﻿"""Extract full fingerprint.com/demo report."""
 import asyncio
 import sys
 import os
@@ -7,13 +7,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from damru import AsyncDamru
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():
     print("=" * 70)
-    print("  fingerprint.com/demo — full report extraction")
+    print("  fingerprint.com/demo â€” full report extraction")
     print("=" * 70)
 
     async with AsyncDamru(
@@ -34,7 +34,7 @@ async def main():
         )
         print("  Page loaded (domcontentloaded)")
 
-        # Wait for API to complete — needs ~50s through rotating proxy
+        # Wait for API to complete â€” needs ~50s through rotating proxy
         for attempt in range(8):
             await asyncio.sleep(10)
             has_results = await page.evaluate("""() => {

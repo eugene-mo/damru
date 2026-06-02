@@ -1,4 +1,4 @@
-"""MuMu mode: fingerprint.com/demo test.
+﻿"""MuMu mode: fingerprint.com/demo test.
 
 Usage:
     python tests/test_mumu_fingerprint.py
@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP   = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP   = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "mumu_fingerprint")
 
 
@@ -41,10 +41,10 @@ async def main():
         target = random.choice(pool or DEVICES)
 
     print("=" * 60)
-    print("  MuMu — fingerprint.com/demo")
+    print("  MuMu â€” fingerprint.com/demo")
     print("=" * 60)
     print(f"  Device:  {target.name}  (Android {target.android_version})")
-    print(f"  GPU:     {target.gpu_family} — {target.webgl_renderer}")
+    print(f"  GPU:     {target.gpu_family} â€” {target.webgl_renderer}")
     print(f"  mem:     {target.device_memory} GB   cores: {target.hardware_concurrency}")
     print()
 
@@ -60,7 +60,7 @@ async def main():
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         await page.goto("https://fingerprint.com/demo/", wait_until="domcontentloaded", timeout=90000)
-        print("  Loaded — waiting 60s for analysis...")
+        print("  Loaded â€” waiting 60s for analysis...")
         await sleep(60)
 
         ss = os.path.join(RESULTS_DIR, "fingerprint.png")
@@ -136,7 +136,7 @@ async def main():
                 if k in api:
                     print(f"    {k}: {api[k]}")
         if data.get("suspectScore") == "N/A" and not signals and not api:
-            print("\n  [Page still loading — increase wait time or check screenshot]")
+            print("\n  [Page still loading â€” increase wait time or check screenshot]")
             print(f"\n  Page text (first 500 chars):\n  {data.get('pageText','')[:500]}")
 
         report = {

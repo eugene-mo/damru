@@ -1,4 +1,4 @@
-"""Quick TTS voices diagnostic and fix verification.
+﻿"""Quick TTS voices diagnostic and fix verification.
 
 Tests that speechSynthesis.getVoices() returns voices after damru warmup.
 """
@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 from damru.utils import sleep
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():

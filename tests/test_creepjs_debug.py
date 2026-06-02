@@ -1,4 +1,4 @@
-"""Debug CreepJS stealth detection on redroid — capture full page details."""
+﻿"""Debug CreepJS stealth detection on redroid â€” capture full page details."""
 import asyncio
 import json
 import sys
@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import DamruPool
 from damru.utils import setup_logging, sleep
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():

@@ -40,17 +40,18 @@ struct rlimit {
 /* ── x86_64 syscall numbers ── */
 
 #define SYS_read                0
-#define SYS_open                2
 #define SYS_close               3
 #define SYS_getrlimit          97
 #define SYS_sysinfo            99
 #define SYS_sched_getaffinity 204
+#define SYS_openat            257
 
 /* ── Constants ── */
 
 #define PAGE_SIZE      4096
 #define RLIMIT_NOFILE  7
 #define RLIMIT_NPROC   6
+#define AT_FDCWD      -100
 
 /* ── Raw x86_64 syscall wrappers ── */
 
@@ -70,6 +71,19 @@ static inline long _sc3(long nr, long a1, long a2, long a3) {
     return ret;
 }
 
+static inline long _sc4(long nr, long a1, long a2, long a3, long a4) {
+    long ret;
+    register long r10 __asm__("r10") = a4;
+    __asm__ volatile("syscall"
+        : "=a"(ret) : "0"(nr), "D"(a1), "S"(a2), "d"(a3), "r"(r10)
+        : "rcx", "r11", "memory");
+    return ret;
+}
+
+static inline long _open_ro(const char *path) {
+    return _sc4(SYS_openat, AT_FDCWD, (long)path, 0, 0);
+}
+
 /* ── Target file and cache ── */
 
 static const char _path[] = "/data/local/tmp/damru_fakemem_gb";
@@ -84,7 +98,7 @@ static void _load(void) {
     if (_done) return;
     _done = 1;
 
-    fd = _sc3(SYS_open, (long)_path, 0, 0);
+    fd = _open_ro(_path);
     if (fd < 0) return;
 
     n = _sc3(SYS_read, fd, (long)buf, 7);
@@ -109,7 +123,7 @@ static int _is_android = -1;
 
 static int _check_android(void) {
     if (_is_android >= 0) return _is_android;
-    long fd = _sc3(SYS_open, (long)"/system/build.prop", 0, 0);
+    long fd = _open_ro("/system/build.prop");
     if (fd >= 0) {
         _sc1(SYS_close, fd);
         _is_android = 1;
@@ -172,7 +186,18 @@ static long _avphys_pages(void) {
 
 __attribute__((visibility("default")))
 long sysconf(int name) {
-    if (_check_android()) {
+    /* Critical Android/Bionic constants must work even before platform
+       detection is reliable in app_process preload context. */
+    switch (name) {
+    case 0x27: return PAGE_SIZE;             /* _SC_PAGESIZE */
+    case 0x28: return PAGE_SIZE;             /* _SC_PAGE_SIZE */
+    case 0x60: return _get_nprocs();         /* _SC_NPROCESSORS_CONF */
+    case 0x61: return _get_nprocs();         /* _SC_NPROCESSORS_ONLN */
+    case 0x62: return _phys_pages();         /* _SC_PHYS_PAGES */
+    case 0x63: return _avphys_pages();       /* _SC_AVPHYS_PAGES */
+    }
+
+    if (1) {
         /* ═══ Bionic (Android) — values from AOSP sysconf.h ═══ */
         switch (name) {
         /* 0x00-0x0c: Basic limits */

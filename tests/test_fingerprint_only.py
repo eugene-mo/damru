@@ -1,4 +1,4 @@
-"""Test fingerprint.com/demo only with 2GB RAM."""
+﻿"""Test fingerprint.com/demo only with 2GB RAM."""
 import asyncio
 import json
 import sys
@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from damru import AsyncDamru
 from damru.utils import sleep, setup_logging
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results", "fingerprint_only")
 
 async def main():
@@ -18,7 +18,7 @@ async def main():
     os.makedirs(RESULTS_DIR, exist_ok=True)
 
     print("=" * 60)
-    print("  fingerprint.com/demo Test — 2GB RAM")
+    print("  fingerprint.com/demo Test â€” 2GB RAM")
     print("=" * 60)
     t_start = time.monotonic()
 

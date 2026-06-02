@@ -5,8 +5,8 @@ Runs via the full Damru pipeline (ADB + root + CDP) and evaluates
 anti-detect effectiveness.
 
 Usage:
-    python -m damru.benchmark --device pixel_8_pro --proxy socks5://host:port
-    python -m damru.benchmark --device random --debug
+    python -m damru benchmark --device pixel_8_pro --proxy socks5://host:port
+    python -m damru benchmark --device random --debug
 """
 from __future__ import annotations
 
@@ -314,7 +314,7 @@ def _format_summary(results: List[TestResult]) -> str:
 
 # ── CLI ──────────────────────────────────────────────────────────
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """CLI entry point for damru benchmark."""
     parser = argparse.ArgumentParser(
         prog="damru-benchmark",
@@ -367,7 +367,7 @@ def main() -> None:
         help="Enable debug logging",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     setup_logging(args.debug)
 
     print("=== damru Benchmark Suite ===\n")

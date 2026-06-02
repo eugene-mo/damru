@@ -1,4 +1,4 @@
-"""Test fingerprint.com/demo with crPage.js Runtime enable/disable patch."""
+﻿"""Test fingerprint.com/demo with crPage.js Runtime enable/disable patch."""
 import asyncio
 import sys
 import os
@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 from damru.utils import sleep
 
-PH_HTTP = "198.20.189.134:50000"
+PH_HTTP = "proxy.example:50000"
 
 
 async def main():

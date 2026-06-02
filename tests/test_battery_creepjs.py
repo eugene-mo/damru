@@ -1,4 +1,4 @@
-"""Test battery spoof + full CreepJS scan via AsyncDamru pipeline.
+﻿"""Test battery spoof + full CreepJS scan via AsyncDamru pipeline.
 
 Verifies:
   1. Battery shows realistic values (not 100% charging)
@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from damru import AsyncDamru
 from damru.utils import setup_logging, sleep
 
-PH_SOCKS5 = "socks5://198.20.189.134:50001"
-PH_HTTP = "198.20.189.134:50000"
+PH_SOCKS5 = "socks5://proxy.example:50001"
+PH_HTTP = "proxy.example:50000"
 
 
 async def goto_retry(page, url, retries=8, wait_until="domcontentloaded", timeout=30000):
@@ -39,7 +39,7 @@ async def goto_retry(page, url, retries=8, wait_until="domcontentloaded", timeou
 async def main():
     setup_logging(debug=False)
     print("=" * 60)
-    print("  Battery Spoof + CreepJS — Full AsyncDamru Pipeline")
+    print("  Battery Spoof + CreepJS â€” Full AsyncDamru Pipeline")
     print("=" * 60)
 
     async with AsyncDamru(
