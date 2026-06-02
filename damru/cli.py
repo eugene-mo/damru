@@ -427,6 +427,18 @@ def _preferred_iptables_backend_lines(sudo: str = "") -> list[str]:
         return _iptables_backend_lines(sudo)
     return _iptables_nft_backend_lines(sudo)
 
+def _wsl_iptables_sanitize_lines(sudo: str = "") -> list[str]:
+    if not _needs_wsl_iptables_backend():
+        return []
+    prefix = f"{sudo} " if sudo else ""
+    return [
+        f"if {prefix}iptables -S 2>/dev/null | grep -Eq '(^-A (oem_|fw_|bw_|st_|tetherctrl_)|^-N (oem_|fw_|bw_|st_|tetherctrl_))'; then",
+        f"  {prefix}iptables -F 2>/dev/null || true",
+        f"  {prefix}iptables -t nat -F 2>/dev/null || true",
+        f"  {prefix}iptables -P FORWARD ACCEPT 2>/dev/null || true",
+        "fi",
+    ]
+
 def _restart_docker_lines(sudo: str = "") -> list[str]:
     prefix = f"{sudo} " if sudo else ""
     return [
@@ -498,6 +510,7 @@ def _start_docker_lines(sudo: str = "", attempts: int = 60) -> list[str]:
     docker_info = f"{prefix}docker info"
     return [
         *_preferred_iptables_backend_lines(sudo),
+        *_wsl_iptables_sanitize_lines(sudo),
         f"if ! {docker_info} >/dev/null 2>/dev/null; then {prefix}pkill dockerd 2>/dev/null || true; {prefix}pkill containerd 2>/dev/null || true; {prefix}rm -f /var/run/docker.pid /var/run/docker.sock; fi",
         "if command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then "
         f"{prefix}systemctl start docker 2>/dev/null || true; fi",
