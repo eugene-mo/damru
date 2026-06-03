@@ -1428,7 +1428,10 @@ def _setup(args: argparse.Namespace) -> int:
     print(f"Config updated: {path}")
 
     if not args.skip_deps:
-        install_code = _install_deps(argparse.Namespace(yes=True, sudo_password_stdin=False))
+        install_code = _install_deps(argparse.Namespace(
+            yes=True,
+            sudo_password_stdin=getattr(args, "sudo_password_stdin", False),
+        ))
         if install_code != 0:
             if _is_windows() and getattr(args, "install_wsl_kernel", False):
                 return _install_bundled_wsl_kernel(argparse.Namespace(yes=True, confirm_wsl_kernel_risk=getattr(args, "confirm_wsl_kernel_risk", False)))
@@ -1838,6 +1841,11 @@ def build_parser() -> argparse.ArgumentParser:
     setup = sub.add_parser("setup", help="guided first-run config and dependency setup")
     setup.add_argument("-y", "--yes", action="store_true", help="accept defaults and run noninteractively")
     setup.add_argument("--skip-deps", action="store_true", help="write config without installing dependencies")
+    setup.add_argument(
+        "--sudo-password-stdin",
+        action="store_true",
+        help="read one sudo password line from stdin while setup installs native Linux dependencies",
+    )
     setup.add_argument("--adb", action="store_true", help="also require an online ADB device during final check")
     setup.add_argument("--mode", choices=["auto", "manual", "mumu"], default=None, help="Damru mode to write to config")
     setup.add_argument("--num-devices", type=int, default=None, help="number of devices/containers")

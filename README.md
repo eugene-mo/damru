@@ -492,6 +492,8 @@ python -m damru install-image
 python -m damru check-env
 ```
 
+`setup` runs dependency setup by default. If no baked image is loaded and no local Chrome APK assets exist, Damru downloads and extracts the APK bundle automatically from `https://cosmicresidential.com/chrome-apks.zip` with the Google Drive mirror as fallback. Users should not need to run `install-apks` manually unless they are baking/customizing raw Redroid images.
+
 If Docker still fails inside WSL, run the safe repair/diagnostic pass:
 
 ```bash
@@ -551,9 +553,10 @@ For testing a separate WSL distro without changing `config.py`, set `DAMRU_WSL_D
 
 > **WSL custom kernel safety:** On Windows, Damru recommends using a fresh/dedicated WSL distro for Redroid. The bundled kernel installer edits `%USERPROFILE%\.wslconfig`, which changes how WSL boots. Damru backs up `.wslconfig`, but a custom WSL kernel can still break Docker/networking/modules or other WSL workloads. Interactive installs require typing the full warning phrase; scripted installs require `--confirm-wsl-kernel-risk` in addition to `--yes`. Native Linux/Ubuntu does not use this WSL kernel installer.
 
-On Windows, `install-deps` runs inside WSL as root and does not use native Windows Docker. On native Linux scripted setup where sudo cannot prompt interactively, pass one password line on stdin:
+On Windows, `setup`/`install-deps` run inside WSL as root and do not use native Windows Docker. On native Linux scripted setup where sudo cannot prompt interactively, pass one password line on stdin:
 
 ```bash
+printf '%s\n' 'your-sudo-password' | python -m damru setup -y --sudo-password-stdin
 printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-password-stdin
 ```
 
