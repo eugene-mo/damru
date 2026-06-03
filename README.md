@@ -13,7 +13,6 @@
   <p>
     <strong>Community:</strong>
     <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended
-    · <a href="https://t.me/TheCPAElite">Telegram personal</a>
   </p>
 </div>
 
@@ -631,7 +630,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed.
+   It downloads the Chrome/WebView/TTS APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing) is for manual recovery if automatic download is unavailable.
 
    If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 

@@ -22,8 +22,8 @@ _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
 _DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
-_DAMRU_APKS_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
-_DAMRU_APKS_MIRROR_URL = ""
+_DAMRU_APKS_URL = "https://cosmicresidential.com/chrome-apks.zip"
+_DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
 
 
 def _is_windows() -> bool:
@@ -1920,8 +1920,8 @@ def build_parser() -> argparse.ArgumentParser:
     install_apks = sub.add_parser("install-apks", help="download and extract raw Chrome/WebView/TTS APK assets")
     install_apks.add_argument("--zip", default=None, help="path to chrome-apks.zip; auto-detected when omitted")
     install_apks.add_argument("--download", action="store_true", help="download the APK bundle if it is not found locally")
-    install_apks.add_argument("--url", default=_DAMRU_APKS_URL, help="primary APK bundle URL")
-    install_apks.add_argument("--mirror-url", default=_DAMRU_APKS_MIRROR_URL, help="fallback Google Drive APK bundle URL")
+    install_apks.add_argument("--url", default=_DAMRU_APKS_URL, help="primary direct APK bundle URL")
+    install_apks.add_argument("--mirror-url", default=_DAMRU_APKS_MIRROR_URL, help="manual-download fallback APK bundle URL")
     install_apks.add_argument("--output", default=None, help="extract target directory; default is ./chrome-apks")
     install_apks.add_argument("--force", action="store_true", help="re-extract even if Chrome APKs are already available")
     install_apks.set_defaults(func=_install_apks)
