@@ -17,15 +17,19 @@ Damru is published under the PolyForm Noncommercial License 1.0.0. This file sum
 - Using Damru for customer work, SaaS, paid tools, paid consulting, paid traffic operations, or any activity directed toward monetary compensation.
 - Using Damru trademarks, logos, project name, screenshots, or proof assets to imply endorsement by the Damru maintainers.
 
-## Fork and Mirror Rules
+## Fork, Mirror, and Attribution Rules
 
-Public forks or mirrors must:
+Public forks, mirrors, readme copies, package copies, or substantial reposts must:
 
 - Keep the PolyForm Noncommercial License 1.0.0.
 - Keep this policy file or an equivalent notice that points back to the original Damru project.
-- Clearly state that the fork is unofficial unless it is maintained by the Damru maintainers.
-- Preserve visible attribution to Damru in the README or repository description.
+- Keep the original copyright, license, and attribution notices in every redistributed copy.
+- Put visible attribution near the top of the README or repository description: `Based on Damru by akwin1234` with a link to the official repository.
+- Clearly state `Unofficial fork/mirror` near the top of the README unless the repository is maintained by the Damru maintainers.
+- Prefer using GitHub's fork feature for public GitHub copies. If a separate repository is used, it must still preserve attribution, license, and the unofficial notice.
 - Not publish Damru proof assets, logos, or benchmark claims in a way that implies the fork is the official project.
+
+Repositories that use the `damru` name without being a GitHub fork or without clear top-level attribution may be treated as confusing or misleading copies. The maintainers may ask the owner to convert the repository into a proper fork, add attribution, rename it, or remove it.
 
 ## Commercial Licensing
 
