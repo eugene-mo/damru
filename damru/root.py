@@ -62,6 +62,9 @@ _NIKGAPPS_GOOGLE_TTS_URL = (
 # eSpeak-NG from F-Droid (bundles 100+ voices offline, no Play Services needed)
 _ESPEAK_APK_URL = "https://f-droid.org/repo/com.reecedunn.espeak_22.apk"
 
+# Used only as a source for Magisk's standalone resetprop binary on raw images.
+_MAGISK_APK_URL = "https://github.com/topjohnwu/Magisk/releases/download/v28.1/Magisk-v28.1.apk"
+
 # Font paths
 _FONTS_XML = "/system/etc/fonts.xml"
 _FONTS_XML_ORIG = "/data/local/tmp/damru_fonts_orig.xml"
@@ -191,13 +194,12 @@ class RootOps:
         if not lib_path:
             raise RootError(f"Unsupported ABI: {abi}. Cannot push resetprop.")
 
-        # Find bundled Magisk APK
+        # Find or fetch Magisk APK used as a resetprop binary source.
         magisk_apk = self._find_magisk_apk()
         if not magisk_apk:
-            raise RootError(
-                "No Magisk APK found. Download Magisk-v28.1.apk and place it in "
-                "the damru package directory, or install Magisk on the device."
-            )
+            magisk_apk = await asyncio.to_thread(self._download_magisk_apk)
+        if not magisk_apk:
+            raise RootError("Could not find or download Magisk APK for resetprop extraction.")
 
         # Extract libmagisk.so from APK
         tmp_path = os.path.join(tempfile.gettempdir(), "damru_resetprop.so")
@@ -241,6 +243,8 @@ class RootOps:
         # Check package directory
         pkg_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         candidates = [
+            "/home/damru/tools/magisk.apk",
+            "/home/damru/tools/Magisk.apk",
             os.path.join(pkg_dir, "tools", "magisk.apk"),
             os.path.join(pkg_dir, "tools", "Magisk.apk"),
             os.path.join(pkg_dir, "magisk.apk"),
@@ -255,6 +259,32 @@ class RootOps:
             if f.lower().startswith("magisk") and f.endswith(".apk"):
                 return os.path.join(pkg_dir, f)
 
+        return None
+
+    @staticmethod
+    def _download_magisk_apk() -> Optional[str]:
+        """Download Magisk APK for resetprop extraction on raw images."""
+        candidates = [
+            os.path.join("/home/damru", "tools", "magisk.apk"),
+            os.path.join(tempfile.gettempdir(), "damru_magisk.apk"),
+        ]
+        last_exc: Exception | None = None
+        for target in candidates:
+            try:
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                if not os.path.isfile(target) or os.path.getsize(target) < 1_000_000:
+                    urllib.request.urlretrieve(_MAGISK_APK_URL, target)
+                if os.path.getsize(target) < 1_000_000:
+                    continue
+                with zipfile.ZipFile(target, "r") as zf:
+                    if not any(name.startswith("lib/") and name.endswith("libmagisk.so") for name in zf.namelist()):
+                        continue
+                return target
+            except Exception as exc:
+                last_exc = exc
+                logger.debug("Magisk APK download/validation failed for %s: %s", target, exc)
+        if last_exc:
+            logger.warning("Magisk APK auto-download failed: %s", last_exc)
         return None
 
     async def set_prop(self, key: str, value: str) -> None:

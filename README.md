@@ -313,7 +313,7 @@ async with AsyncDamru(chrome_apk="/home/damru/chrome-apks/145.0.7632.75") as bro
     page = await browser.new_page()
 ```
 
-`tools/magisk.apk` is also kept out of Git because it is a third-party APK. The normal baked-image flow does not need users to provide it. Raw/manual flows may use it as a fallback source for `resetprop` if the Android image does not already provide `resetprop`.
+`tools/magisk.apk` is also kept out of Git because it is a third-party APK. Users do not need to provide it for normal setup. If raw/unbaked Redroid does not provide `resetprop`, Damru automatically downloads the official Magisk APK to `/home/damru/tools/magisk.apk` and extracts only the standalone `resetprop` binary from it.
 
 ---
 
