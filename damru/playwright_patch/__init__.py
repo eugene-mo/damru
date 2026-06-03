@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Marker string present in our patched crPage.js -- used for quick detection.
 _PATCH_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME_DAMRU_DYNAMIC_V2"
 _ENV_MARKER = "PLAYWRIGHT_STEALTH_RUNTIME"
-_VALID_RUNTIME_SNIPPET = f"process.env.{_ENV_MARKER} &&"
+_VALID_RUNTIME_SNIPPET = f"process.env.{_ENV_MARKER} ?"
 _VALID_CONTEXT_SNIPPET = "const frame = contextPayload.auxData ?"
 
 # Location of the bundled (already-patched) crPage.js shipped with damru.
@@ -95,7 +95,11 @@ def _patch_text(source: str) -> str:
     # Repair bad patches created by older mojibake-cleanup builds.
     source = source.replace(
         f'process.env.{_ENV_MARKER}  this._client.send',
+        f'process.env.{_ENV_MARKER} ? this._client.send',
+    )
+    source = source.replace(
         f'process.env.{_ENV_MARKER} && this._client.send',
+        f'process.env.{_ENV_MARKER} ? this._client.send',
     )
     source = source.replace(
         'const frame = contextPayload.auxData  this._page',
@@ -110,7 +114,7 @@ def _patch_text(source: str) -> str:
 
     runtime_enable = 'this._client.send("Runtime.enable", {}),'
     replacement = (
-        f'(process.env.{_ENV_MARKER} && '
+        f'(process.env.{_ENV_MARKER} ? '
         'this._client.send("Runtime.enable", {}).then(() => { '
         f'/* {_PATCH_MARKER} */ '
         'this._stealthDisableTimer = setTimeout(() => { '

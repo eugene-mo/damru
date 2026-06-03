@@ -22,6 +22,7 @@ const frame = contextPayload.auxData ? this._page.frameManager.frame(contextPayl
     assert _VALID_RUNTIME_SNIPPET in patched
     assert _VALID_CONTEXT_SNIPPET in patched
     assert f"process.env.{_ENV_MARKER}  this" not in patched
+    assert f"process.env.{_ENV_MARKER} && this" not in patched
     assert "contextPayload.auxData  this._page" not in patched
 
 
@@ -36,4 +37,5 @@ const frame = contextPayload.auxData  this._page.frameManager.frame(contextPaylo
     assert _VALID_RUNTIME_SNIPPET in repaired
     assert _VALID_CONTEXT_SNIPPET in repaired
     assert f"process.env.{_ENV_MARKER}  this" not in repaired
+    assert f"process.env.{_ENV_MARKER} && this" not in repaired
     assert "contextPayload.auxData  this._page" not in repaired

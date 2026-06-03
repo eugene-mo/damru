@@ -24,8 +24,8 @@ async def main():
             screenHeight: screen.height,
             devicePixelRatio: window.devicePixelRatio,
             hasUAData: !!navigator.userAgentData,
-            uaDataMobile: navigator.userAgentData  navigator.userAgentData.mobile : 'N/A',
-            uaDataPlatform: navigator.userAgentData  navigator.userAgentData.platform : 'N/A',
+            uaDataMobile: navigator.userAgentData ? navigator.userAgentData.mobile : 'N/A',
+            uaDataPlatform: navigator.userAgentData ? navigator.userAgentData.platform : 'N/A',
         };
     }""")
 

@@ -46,7 +46,7 @@ async def main():
             outerH: window.outerHeight,
             dpr: window.devicePixelRatio,
             colorDepth: screen.colorDepth,
-            orientation: screen.orientation  screen.orientation.type : 'N/A',
+            orientation: screen.orientation ? screen.orientation.type : 'N/A',
         })""")
         print(f"  screen: {sc['screenW']}x{sc['screenH']}")
         print(f"  avail:  {sc['availW']}x{sc['availH']}")

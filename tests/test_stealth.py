@@ -45,8 +45,8 @@ DETECTION_SCRIPT = """() => {
     try {
         const dmDesc = Object.getOwnPropertyDescriptor(N, 'deviceMemory');
         const hcDesc = Object.getOwnPropertyDescriptor(N, 'hardwareConcurrency');
-        results.dm_name = dmDesc && dmDesc.get  dmDesc.get.name : 'N/A';
-        results.hc_name = hcDesc && hcDesc.get  hcDesc.get.name : 'N/A';
+        results.dm_name = dmDesc && dmDesc.get ? dmDesc.get.name : 'N/A';
+        results.hc_name = hcDesc && hcDesc.get ? hcDesc.get.name : 'N/A';
     } catch(e) { results.name_error = e.message; }
 
     // 4. Function.prototype.toString integrity

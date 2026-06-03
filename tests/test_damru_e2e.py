@@ -148,8 +148,8 @@ async def main():
             if (!gl) return {error: 'no webgl'};
             const ext = gl.getExtension('WEBGL_debug_renderer_info');
             return {
-                vendor: ext  gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
-                renderer: ext  gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+                vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+                renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
             };
         }""")
         print(f"\n{'='*60}")

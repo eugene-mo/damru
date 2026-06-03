@@ -19,8 +19,8 @@ FINGERPRINT_SCRIPT = """async () => {
         const gl = c.getContext('webgl');
         if (gl) {
             const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-            r.gpuVendor = dbg  gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : 'no dbg ext';
-            r.gpuRenderer = dbg  gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'no dbg ext';
+            r.gpuVendor = dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : 'no dbg ext';
+            r.gpuRenderer = dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : 'no dbg ext';
             r.webglExts = gl.getSupportedExtensions().length;
             r.webglExtList = gl.getSupportedExtensions().join(', ');
         }
