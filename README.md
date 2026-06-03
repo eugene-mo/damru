@@ -229,8 +229,14 @@ Download the current pre-baked image:
 Current local artifact prepared for release testing:
 
 ```bash
-sha256sum -c damru-redroid-latest.tar.sha256
-docker load -i damru-redroid-latest.tar
+python -m damru install-deps -y
+python -m damru install-image
+```
+
+`install-image` auto-detects `damru-redroid-latest.tar` in the current directory, parent directory, project root, home, or Downloads, verifies its SHA-256, and runs `docker load` inside Linux/WSL. If the tarball is not local, use:
+
+```bash
+python -m damru install-image --download
 ```
 
 If the tarball is missing, rebuild it on Linux/WSL:
@@ -286,10 +292,12 @@ After Damru is installed, you can also let the CLI install the common Linux/WSL 
 
 ```bash
 python -m damru install-deps
+python -m damru install-image
 python -m damru check-env
 ```
 
 `install-deps` is idempotent: on a fresh Ubuntu WSL/Linux install it installs ADB, Docker, iptables, curl/wget/git/jq, mounts binderfs, and starts Docker. On later runs it reuses installed packages and rehydrates Docker/binderfs after WSL restarts.
+`install-image` loads the baked `damru-redroid:latest` image, which already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Users do not need to provide Chrome APKs unless they intentionally run an unbaked raw Redroid image.
 
 On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB through WSL. When Docker-published ADB ports are unreliable, Damru uses host networking and remaps each Redroid worker's `adbd` to a unique port (`5600`, `5601`, ...), so multi-worker pools can still run without native Windows Docker. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL prefers legacy iptables where available because some WSL kernels reject Docker's `addrtype` NAT rule through nft. See [WSL kernel notes](docs/WSL_KERNEL.md) and the latest [WSL fallback test results](docs/WSL_FALLBACK_TEST_RESULTS.md).
 
@@ -410,6 +418,7 @@ Verify the local environment:
 
 ```bash
 python -m damru setup
+python -m damru install-image
 python -m damru check-env
 ```
 

@@ -171,11 +171,14 @@ For first-run setup, prefer the CLI:
 
 ```bash
 python -m damru setup
+python -m damru install-image
 python -m damru check-env
 python -m damru fix-wsl
 ```
 
-`check-env` verifies Linux/WSL tools, Docker, binderfs, Chrome APK discovery, and the Damru Playwright `crPage.js` patch. `fix-wsl` retries safe Docker, binderfs, routing, and netfilter repairs. On Windows, Docker/Redroid is always managed inside WSL2; native Windows Docker is not used. Redroid auto mode routes ADB through WSL and can use host networking with per-worker ADB port remapping (`wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, ...) when Docker-published ADB ports are unreliable. Host-network containers are started with Android DNS boot parameters, and Damru repairs WSL policy routing/default routes after setup so no-proxy HTTPS navigation works in fresh WSL sessions. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL uses legacy iptables where available because several WSL kernels reject Docker's `addrtype` NAT rule through nft.
+`install-image` auto-detects and loads `damru-redroid-latest.tar`; use `python -m damru install-image --download` if the tarball is not local. The baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences, so users do not need separate Chrome APKs unless they intentionally run an unbaked raw Redroid image.
+
+`check-env` verifies Linux/WSL tools, Docker, binderfs, baked image/Chrome asset discovery, and the Damru Playwright `crPage.js` patch. `fix-wsl` retries safe Docker, binderfs, routing, and netfilter repairs. On Windows, Docker/Redroid is always managed inside WSL2; native Windows Docker is not used. Redroid auto mode routes ADB through WSL and can use host networking with per-worker ADB port remapping (`wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, ...) when Docker-published ADB ports are unreliable. Host-network containers are started with Android DNS boot parameters, and Damru repairs WSL policy routing/default routes after setup so no-proxy HTTPS navigation works in fresh WSL sessions. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL uses legacy iptables where available because several WSL kernels reject Docker's `addrtype` NAT rule through nft.
 
 Damru normalizes new Android Chrome tabs before returning them from `context.new_page()`. User code can immediately navigate a new page in single sessions or concurrent pools without first fighting Chrome's Android startup/home-tab navigation.
 

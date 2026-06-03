@@ -16,6 +16,10 @@ import time
 from pathlib import Path
 from pathlib import PureWindowsPath
 
+_DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
+_DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
+_DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
+
 
 def _is_windows() -> bool:
     return sys.platform == "win32"
@@ -756,7 +760,8 @@ def _check_env(args: argparse.Namespace) -> int:
 
     if failures:
         if asset_failures:
-            print("\nLoad the baked Damru Redroid image or place Chrome APKs under ./chrome-apks/<version>/.")
+            print("\nLoad the baked Damru Redroid image with: python -m damru install-image")
+            print("Or place Chrome APKs under ./chrome-apks/<version>/ for raw Redroid images.")
         print("Run 'python -m damru install-deps' for common Linux/WSL dependencies.")
         if _is_windows() and not docker_ok:
             print("Run 'python -m damru fix-wsl' to retry safe WSL Docker/binderfs fixes and print kernel guidance.")
@@ -1335,6 +1340,21 @@ def _install_deps(args: argparse.Namespace) -> int:
         return 1
     print(f"Playwright crPage.js patch OK: {patch_detail}")
 
+    try:
+        from .config import REDROID_IMAGE
+    except Exception:
+        REDROID_IMAGE = "damru-redroid:latest"
+    image_ok = _linux_run(
+        f"docker images -q {shlex.quote(REDROID_IMAGE)} | grep -q .",
+        timeout=20,
+        root_user=_is_windows(),
+    ).returncode == 0
+    if not image_ok and _find_image_tar() is not None:
+        print("Found local damru-redroid-latest.tar; loading baked Redroid image...")
+        image_code = _install_image(argparse.Namespace(tar=None, download=False, url=_DAMRU_IMAGE_URL, output=None))
+        if image_code != 0:
+            return image_code
+
     print("Dependencies installed. Run 'python -m damru check-env' to verify.")
     return 0
 
@@ -1431,6 +1451,113 @@ def _bake_image(args: argparse.Namespace) -> int:
         )
 
     asyncio.run(_run_bake())
+    return 0
+
+def _candidate_image_tars(explicit: str | None = None) -> list[Path]:
+    candidates: list[Path] = []
+    if explicit:
+        candidates.append(Path(explicit).expanduser())
+    for root in (Path.cwd(), Path.cwd().parent, _repo_root(), _repo_root().parent, Path.home(), Path.home() / "Downloads"):
+        candidates.append(root / _DAMRU_IMAGE_TAR)
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in candidates:
+        key = str(path.resolve()) if path.exists() else str(path.absolute())
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+def _find_image_tar(explicit: str | None = None) -> Path | None:
+    for path in _candidate_image_tars(explicit):
+        if path.is_file():
+            return path.resolve()
+    return None
+
+def _download_google_drive_file(url: str, target: Path) -> None:
+    import requests
+
+    file_id_match = re.search(r"/d/([^/]+)/", url) or re.search(r"[?&]id=([^&]+)", url)
+    if not file_id_match:
+        raise RuntimeError("unsupported Drive URL; pass --url with a Google Drive file link")
+    session = requests.Session()
+    response = session.get(
+        "https://drive.google.com/uc",
+        params={"export": "download", "id": file_id_match.group(1)},
+        stream=True,
+        timeout=60,
+    )
+    token = next((value for key, value in response.cookies.items() if key.startswith("download_warning")), None)
+    if token:
+        response.close()
+        response = session.get(
+            "https://drive.google.com/uc",
+            params={"export": "download", "id": file_id_match.group(1), "confirm": token},
+            stream=True,
+            timeout=60,
+        )
+    response.raise_for_status()
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".part")
+    downloaded = 0
+    with tmp.open("wb") as fh:
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
+            if not chunk:
+                continue
+            fh.write(chunk)
+            downloaded += len(chunk)
+            if downloaded and downloaded % (100 * 1024 * 1024) < 1024 * 1024:
+                print(f"Downloaded {downloaded // (1024 * 1024)} MB...")
+    tmp.replace(target)
+
+def _install_image(args: argparse.Namespace) -> int:
+    try:
+        from .config import REDROID_IMAGE
+    except Exception:
+        REDROID_IMAGE = "damru-redroid:latest"
+
+    if not _docker_info_ok(timeout=20):
+        print("Docker is not running. Run 'python -m damru install-deps -y' first.", file=sys.stderr)
+        return 1
+
+    tar_path = _find_image_tar(args.tar)
+    if tar_path is None:
+        if not args.download:
+            searched = "\n  ".join(str(p) for p in _candidate_image_tars(args.tar))
+            print(f"Could not find {_DAMRU_IMAGE_TAR}. Searched:\n  {searched}", file=sys.stderr)
+            print("Place the tarball there or run: python -m damru install-image --download", file=sys.stderr)
+            return 1
+        target = Path(args.output or (Path.cwd() / _DAMRU_IMAGE_TAR)).expanduser().resolve()
+        print(f"Downloading baked image to {target}")
+        try:
+            _download_google_drive_file(args.url, target)
+        except Exception as exc:
+            print(f"Image download failed: {exc}", file=sys.stderr)
+            print(f"Manual download URL: {args.url}", file=sys.stderr)
+            return 1
+        tar_path = target
+
+    digest = _file_sha256(tar_path)
+    if digest.lower() != _DAMRU_IMAGE_SHA256.lower():
+        print(f"Image checksum mismatch for {tar_path.name}: expected {_DAMRU_IMAGE_SHA256}, got {digest}", file=sys.stderr)
+        return 1
+
+    linux_tar = _to_wsl_path(str(tar_path)) if _is_windows() else str(tar_path)
+    print(f"Loading {tar_path} into Docker as {REDROID_IMAGE}...")
+    load = _linux_run(f"docker load -i {shlex.quote(linux_tar)}", timeout=1800, root_user=_is_windows())
+    if load.stdout.strip():
+        print(load.stdout.strip())
+    if load.returncode != 0:
+        if load.stderr.strip():
+            print(load.stderr.strip(), file=sys.stderr)
+        return load.returncode
+
+    image_ok = _linux_run(f"docker images -q {shlex.quote(REDROID_IMAGE)} | grep -q .", timeout=20, root_user=_is_windows()).returncode == 0
+    if not image_ok:
+        print(f"Docker loaded the tarball, but {REDROID_IMAGE} was not found.", file=sys.stderr)
+        return 1
+    print(f"Redroid image ready: {REDROID_IMAGE}")
     return 0
 
 
@@ -1623,6 +1750,13 @@ def build_parser() -> argparse.ArgumentParser:
     bake.add_argument("--image", default="damru-redroid:latest", help="target Docker image tag")
     bake.add_argument("--wsl-distro", default=None, help="WSL distro to use on Windows")
     bake.set_defaults(func=_bake_image)
+
+    install_image = sub.add_parser("install-image", help="load or download the baked Damru Redroid image")
+    install_image.add_argument("--tar", default=None, help="path to damru-redroid-latest.tar; auto-detected when omitted")
+    install_image.add_argument("--download", action="store_true", help="download the image tarball if it is not found locally")
+    install_image.add_argument("--url", default=_DAMRU_IMAGE_URL, help="Google Drive image URL used with --download")
+    install_image.add_argument("--output", default=None, help="download target path; default is ./damru-redroid-latest.tar")
+    install_image.set_defaults(func=_install_image)
 
     devices = sub.add_parser("devices", help="list ADB devices from Linux/WSL")
     devices.set_defaults(func=_devices)
