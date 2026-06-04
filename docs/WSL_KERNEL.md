@@ -49,13 +49,7 @@ Local validation on this machine found:
 
 ## Host-Network ADB Fallback
 
-Damru also supports a WSL fallback for kernels that can run binderfs/Redroid but cannot run Docker bridge/NAT cleanly. In the most limited mode Damru can start Docker like this:
-
-```bash
-dockerd --iptables=false --ip6tables=false --bridge=none --host=unix:///var/run/docker.sock
-```
-
-Redroid then runs with Docker host networking. On Windows/WSL, Damru remaps each worker's Android `adbd` after boot to a stable per-worker port:
+Damru's current Windows/WSL runtime uses Docker bridge networking with published ADB ports. This keeps Android `netd` isolated from the WSL host namespace, which prevents Redroid from corrupting WSL routes, policy rules, iptables, or DNS. Workers appear at stable per-worker serials:
 
 ```text
 worker 0 -> wsl:127.0.0.1:5600
@@ -63,11 +57,12 @@ worker 1 -> wsl:127.0.0.1:5601
 worker N -> wsl:127.0.0.1:(5600 + N)
 ```
 
-This avoids the common WSL failure where Docker-published TCP ports accept connections but ADB stays `offline`. Damru starts/remaps host-network workers sequentially so only one container temporarily uses Redroid's default `5555` port during boot.
+If an older Damru container was created with host networking, current Damru recreates it with bridge networking on the next start.
 
-Fallback limits:
+Bridge/NAT requirements:
 
-- Docker bridge/NAT features are unavailable until the WSL kernel supports the missing netfilter pieces, but Damru auto mode can still use host-network ADB remapping for Redroid workers.
+- Docker bridge/NAT must work inside the selected WSL distro.
+- The bundled Damru WSL kernel includes the binderfs and netfilter pieces needed by Docker bridge/NAT and Redroid.
 - If Android inside Redroid also lacks the `iptables` filter table, Damru skips the kernel WebRTC UDP block and keeps the Chrome WebRTC policy/CDP protections active. That is stable, but kernel-level WebRTC leak protection is degraded on that kernel.
 
 ## Bundled Damru Kernel Installer
@@ -93,7 +88,7 @@ The installer is backup-first. It verifies the bundled checksums, copies the ker
 
 For Windows users, Damru recommends a fresh/dedicated WSL distro for Redroid. Installing the bundled kernel changes `%USERPROFILE%\.wslconfig`, so it affects how WSL boots. Damru backs up `.wslconfig` before editing it, but a custom kernel can still break Docker, networking, modules, or other WSL workloads. Native Linux/Ubuntu does not use this WSL kernel installer.
 
-Interactive installs require typing the full confirmation phrase shown by the CLI. Noninteractive installs require both `--yes` and `--confirm-wsl-kernel-risk`; `--yes` alone is intentionally refused.
+The UI requires typing `yes` before installing the bundled WSL kernel. Noninteractive CLI installs require both `--yes` and `--confirm-wsl-kernel-risk`; `--yes` alone is intentionally refused.
 Status only:
 
 ```powershell
@@ -137,13 +132,13 @@ python -m damru check-env
 - Select a Docker-compatible iptables backend. Damru prefers `iptables-legacy` in WSL because some WSL kernels reject Docker's `addrtype` NAT rule through `iptables-nft`. Native Linux prefers `iptables-nft`, which is what modern Docker daemons generally use for their NAT chains.
 - Load common Docker/Redroid modules with `modprobe`.
 - Mount binderfs at `/dev/binderfs`.
-- Start the Docker daemon inside Linux/WSL. It tries systemd, classic `service`, direct `dockerd`, then the no-iptables/no-bridge fallback for limited WSL kernels.
+- Start the Docker daemon inside Linux/WSL. It tries systemd, classic `service`, then direct `dockerd`.
 - Repair Docker bridge container internet by enabling IPv4 forwarding and inserting targeted `docker0` FORWARD/MASQUERADE rules before stale Android-style chains such as `oem_fwd`, `fw_FORWARD`, `bw_FORWARD`, and `tetherctrl_FORWARD`.
-- Report clearly when the active kernel blocks full bridge/NAT mode.
+- Report clearly when the active kernel blocks bridge/NAT mode.
 
-## If Full Bridge/NAT Is Still Required
+## If Bridge/NAT Is Still Broken
 
-For classic Docker bridge networking, install or boot a WSL2 kernel that includes Docker bridge/NAT and binderfs support, then restart WSL:
+Install or boot a WSL2 kernel that includes Docker bridge/NAT and binderfs support, then restart WSL:
 
 ```powershell
 wsl --shutdown
@@ -166,7 +161,7 @@ python -m damru check-env --viewer
 python -m damru fix-wsl
 ```
 
-Windows auto mode uses host-network Redroid for reliable ADB. Host-network Redroid containers share WSL kernel-level sockets across distros. Do not run host-network Redroid workers in two WSL distros at the same time. `check-env` now reports a cross-distro conflict before pool startup if another distro already has running host-network Redroid containers.
+Windows auto mode uses Docker bridge networking with published ADB ports. Use one dedicated Damru WSL distro at a time so old/stale containers from another distro do not confuse ADB or Docker state. For temporary side-by-side testing only, set a different base port such as `$env:DAMRU_REDROID_BASE_PORT = "5700"` before starting workers.
 
 ## Verified Commands
 

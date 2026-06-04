@@ -2,12 +2,25 @@
 
 Damru normally runs headless. Visual tooling is optional and must be launched explicitly so normal stealth automation does not open windows or send manual input events.
 
+## Local UI Viewer
+
+The easiest viewer path is the experimental local dashboard:
+
+```bash
+python -m damru ui
+```
+
+Open **Work Lab**, select an ADB worker, then click **Open viewer**. The browser viewer streams Android screenshots and sends click, drag, text, Back, Home, and Recent actions over ADB. It is useful for quick inspection, but native `scrcpy` is usually smoother for long manual sessions.
+
+Use **Copy native command** in Work Lab to copy the right terminal command for the current OS and selected worker. On Windows, Damru still manages workers through WSL, but the native viewer command passes the plain TCP serial such as `127.0.0.1:5600` to `scrcpy`.
+
 ## Commands
 
 ```bash
 python -m damru devices
 python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
 python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+python -m damru view --serial wsl:127.0.0.1:5600
 python -m damru view --serial wsl:127.0.0.1:5600 --no-control
 ```
 

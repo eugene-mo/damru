@@ -405,8 +405,8 @@ class RootOps:
         ports (3478, 5349, 19302-19309). Sites like todetect.net use custom
         STUN servers on non-standard ports which port-based rules miss.
 
-        Chrome only needs TCP (HTTP proxy handles all TCP traffic). DNS goes
-        through DoH (HTTPS/TCP). No UDP is needed for Chrome operation.
+        Chrome still needs UDP/53 on raw Redroid unless DoH is fully active.
+        Damru allows DNS first, then drops the rest of Chrome's UDP traffic.
 
         WebRTC API stays "enabled" in Chrome — STUN simply fails silently,
         so no public IP candidate is generated. This looks like being behind
@@ -446,13 +446,29 @@ class RootOps:
                 pass
 
         if chrome_uid:
+            # Clean up older Damru fallback rules. In WSL host-network Redroid,
+            # container iptables shares the WSL network namespace, so broad
+            # non-owner UDP rules can destabilize unrelated traffic.
+            await self.adb.shell_root("iptables -D OUTPUT -p udp --dport 1024:65535 -j DROP 2>/dev/null || true")
+            await self.adb.shell_root("iptables -D OUTPUT -p tcp --dport 3478 -j DROP 2>/dev/null || true")
+            await self.adb.shell_root("iptables -D OUTPUT -p tcp --dport 5349 -j DROP 2>/dev/null || true")
+
+            dns_check = await self.adb.shell(
+                f"su 0 iptables -C OUTPUT -p udp --dport 53 -m owner --uid-owner {chrome_uid} -j ACCEPT 2>&1",
+                allow_failure=True,
+            )
+            if dns_check.strip() != "":
+                await self.adb.shell_root(
+                    f"iptables -I OUTPUT 1 -p udp --dport 53 -m owner --uid-owner {chrome_uid} -j ACCEPT 2>&1",
+                )
+
             # Check if UID-based rule already exists
             check = await self.adb.shell(
                 f"su 0 iptables -C OUTPUT -p udp -m owner --uid-owner {chrome_uid} -j DROP 2>&1",
                 allow_failure=True,
             )
             if check.strip() == "":
-                logger.debug("WebRTC UID-based UDP block already applied — skipping")
+                logger.debug("WebRTC UID-based UDP block already applied — DNS allow rule ensured")
                 return
 
             # Try UID-based block (requires xt_owner kernel module)
@@ -461,7 +477,7 @@ class RootOps:
                     f"iptables -I OUTPUT -p udp -m owner --uid-owner {chrome_uid} -j DROP 2>&1",
                 )
                 if result.strip() == "" or "owner" not in result.lower():
-                    logger.info("WebRTC blocked: ALL UDP from Chrome UID %d (iptables owner match)", chrome_uid)
+                    logger.info("WebRTC blocked: Chrome UID %d UDP except DNS/53 (iptables owner match)", chrome_uid)
                     return
                 logger.debug("xt_owner unavailable (%s), falling back to port-based block", result.strip())
             except Exception as exc:

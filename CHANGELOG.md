@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added `python -m damru ui`, an experimental localhost dashboard for setup checks, worker lifecycle actions, Work Lab browser actions, browser-based live viewing, native viewer command copy, gallery cleanup, and inline job logs.
+- Added `python -m damru quick-check`, a fast local Android/Chrome sanity checker for ADB, boot, Chrome, DNS, timezone, locale, Android props, and core fingerprint fields.
+- Added `python -m damru fix-internet` and UI worker actions for repairing WSL/Docker/Android DNS and internet state across one worker or all running Damru workers.
+- Changed Windows/WSL Redroid worker startup to use Docker bridge networking with published ADB ports, avoiding host-network Redroid mutations of WSL routes, policy rules, iptables, and DNS.
+- Made native `scrcpy` viewer commands strip the internal `wsl:` serial prefix on Windows while keeping WSL-routed ADB support for Damru CLI actions.
+- Packaged `damru.ui` static assets in both `pyproject.toml` and legacy `setup.py` so pip installs can run the UI without a source checkout.
+- Added `DAMRU_REDROID_BASE_PORT` for temporary side-by-side WSL testing when another local Damru runtime already owns the default `5600+` ADB ports.
 - Added copyright, official-repository, no-false-authorship, no-relicensing, no-confusing-copy, and public-source-not-public-domain notices to the legal policy.
 - Broadened the legal policy so attribution and unofficial-copy requirements apply to the full Damru codebase, docs, native code, examples, tests, configs, package metadata, release artifacts, and proof assets.
 - Tightened fork/mirror attribution policy so public copies must preserve the license, credit Damru visibly, and identify themselves as unofficial unless maintained by the Damru maintainers.

@@ -28,6 +28,7 @@ from .apk_assets import find_bundle_apk
 from .cdp import CDPConnection
 from .chrome import ChromeManager
 from .devices import AndroidDevice, get_device, get_random_device, pick_random_android_version, pick_random_chrome_version
+from .netfix import wsl_runtime_network_repair_script
 from .profiles import DamruProfile, build_profile
 from .proxy import build_accept_language, resolve_locale_for_geo
 from .root import RootOps
@@ -740,33 +741,7 @@ class AsyncDamru:
         except Exception:
             WSL_DISTRO = "Ubuntu"
         WSL_DISTRO = os.environ.get("DAMRU_WSL_DISTRO") or WSL_DISTRO
-        script = "\n".join([
-            "set +e",
-            "if ip rule show | grep -q '32000:.*unreachable' && ! ip rule show | grep -q '31999:.*lookup main'; then",
-            "  ip rule add pref 31999 lookup main 2>/dev/null || true",
-            "fi",
-            "if ! ip route show default | grep -q .; then",
-            "  set -- $(ip -4 -o addr show eth0)",
-            "  ip=${4%/*}",
-            "  o1=${ip%%.*}; rest=${ip#*.}",
-            "  o2=${rest%%.*}; rest=${rest#*.}",
-            "  o3=${rest%%.*}",
-            "  gw=$o1.$o2.$((o3 / 16 * 16)).1",
-            "  [ -n \"$gw\" ] && ip route replace default via \"$gw\" dev eth0 2>/dev/null || true",
-            "fi",
-            "if docker info >/dev/null 2>/dev/null && docker network inspect bridge >/dev/null 2>/dev/null; then",
-            "  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true",
-            "  docker_subnet=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Subnet}}' 2>/dev/null)",
-            "  docker_if=$(docker network inspect bridge --format '{{.Options.com.docker.network.bridge.name}}' 2>/dev/null)",
-            "  [ -n \"$docker_if\" ] || docker_if=docker0",
-            "  [ \"$docker_if\" != \"<no value>\" ] || docker_if=docker0",
-            "  if [ -n \"$docker_subnet\" ] && ip link show \"$docker_if\" >/dev/null 2>&1; then",
-            "    iptables -C FORWARD -i \"$docker_if\" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -i \"$docker_if\" -j ACCEPT 2>/dev/null || true",
-            "    iptables -C FORWARD -o \"$docker_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -o \"$docker_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true",
-            "    iptables -t nat -C POSTROUTING -s \"$docker_subnet\" ! -o \"$docker_if\" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s \"$docker_subnet\" ! -o \"$docker_if\" -j MASQUERADE 2>/dev/null || true",
-            "  fi",
-            "fi",
-        ])
+        script = wsl_runtime_network_repair_script()
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
         wrapped = f"printf %s {encoded} | base64 -d | bash"
         try:
@@ -1066,7 +1041,12 @@ class AsyncDamru:
             p.on("framenavigated", _on_frame_navigated)
 
         if needs_cores_override:
-            await _arm_browser_worker_cores()
+            # Do not keep a second raw browser-level CDP websocket open by
+            # default. On Android Chrome 145 this can detach/close Playwright's
+            # main CDP connection after startup. The page-session auto-attach
+            # below is less aggressive; worker mismatches remain a warning.
+            if os.environ.get("DAMRU_EXPERIMENTAL_RAW_WORKER_CDP") == "1":
+                await _arm_browser_worker_cores()
             await _apply_cdp_cores(page)
             _bind_cores_reapply_on_navigation(page)
             def _on_page(p: Page) -> None:
@@ -1348,6 +1328,8 @@ class AsyncDamru:
         """
         if not self._context:
             return
+        logger.info("Network emulation skipped: using native Redroid connectivity for stability")
+        return
 
         # Match the real Samsung reference profile captured for this project.
         conn_type = "wifi"
@@ -1368,9 +1350,9 @@ class AsyncDamru:
             try:
                 cdp = await self._context.new_cdp_session(p)  # type: ignore[union-attr]
                 await cdp.send("Network.enable", {})
-                # Applies throttling model.
-                await cdp.send("Network.emulateNetworkConditions", net_params)
-                # Ensures navigator.connection reflects spoofed state.
+                # Avoid request throttling here. On Redroid/WSL it can trigger
+                # ERR_NETWORK_CHANGED / ERR_INTERNET_DISCONNECTED mid-run.
+                # overrideNetworkState is enough for navigator.connection.
                 await cdp.send("Network.overrideNetworkState", net_params)
             except Exception as exc:
                 logger.debug("Network emulation failed for page: %s", exc)

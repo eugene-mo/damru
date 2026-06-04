@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import html
 import importlib.util
+import json
 import os
 import platform
 import re
@@ -17,6 +19,7 @@ import zipfile
 from pathlib import Path
 from pathlib import PureWindowsPath
 from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_bundle
+from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines, wsl_runtime_network_repair_script
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "19bfe988e58d41fa031b7df3ebd3a1cb8213cf376b5972c0749a40b42df9feb2"
@@ -300,21 +303,7 @@ def _docker_info_ok(timeout: int = 20) -> bool:
 def _repair_wsl_main_route_rule() -> None:
     if not _is_windows():
         return
-    script = "\n".join([
-        "set +e",
-        "if ip rule show | grep -q '32000:.*unreachable' && ! ip rule show | grep -q '31999:.*lookup main'; then",
-        "  ip rule add pref 31999 lookup main 2>/dev/null || true",
-        "fi",
-        "if ! ip route show default | grep -q .; then",
-        "  set -- $(ip -4 -o addr show eth0)",
-        "  ip=${4%/*}",
-        "  o1=${ip%%.*}; rest=${ip#*.}",
-        "  o2=${rest%%.*}; rest=${rest#*.}",
-        "  o3=${rest%%.*}",
-        "  gw=$o1.$o2.$((o3 / 16 * 16)).1",
-        "  [ -n \"$gw\" ] && ip route replace default via \"$gw\" dev eth0 2>/dev/null || true",
-        "fi",
-    ])
+    script = wsl_runtime_network_repair_script()
     try:
         result = _linux_run(script, timeout=30, root_user=True)
     except subprocess.TimeoutExpired:
@@ -454,6 +443,9 @@ def _restart_docker_lines(sudo: str = "") -> list[str]:
     return [
         "if docker info >/dev/null 2>/dev/null; then",
         "  if command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then",
+        f"    {prefix}systemctl reset-failed docker docker.socket containerd 2>/dev/null || true",
+        f"    {prefix}systemctl start docker.socket 2>/dev/null || true",
+        f"    {prefix}systemctl start containerd 2>/dev/null || true",
         f"    {prefix}systemctl restart docker 2>/dev/null || true",
         "  else",
         f"    {prefix}service docker restart 2>/dev/null || true",
@@ -464,20 +456,80 @@ def _restart_docker_lines(sudo: str = "") -> list[str]:
 
 def _docker_bridge_nat_repair_lines(sudo: str = "") -> list[str]:
     prefix = f"{sudo} " if sudo else ""
-    return [
-        "if docker info >/dev/null 2>/dev/null && docker network inspect bridge >/dev/null 2>/dev/null; then",
-        f"  {prefix}sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true",
-        "  docker_subnet=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Subnet}}' 2>/dev/null)",
-        "  docker_if=$(docker network inspect bridge --format '{{.Options.com.docker.network.bridge.name}}' 2>/dev/null)",
-        "  [ -n \"$docker_if\" ] || docker_if=docker0",
-        "  [ \"$docker_if\" != \"<no value>\" ] || docker_if=docker0",
-        "  if [ -n \"$docker_subnet\" ] && ip link show \"$docker_if\" >/dev/null 2>&1; then",
-        f"    {prefix}iptables -C FORWARD -i \"$docker_if\" -j ACCEPT 2>/dev/null || {prefix}iptables -I FORWARD 1 -i \"$docker_if\" -j ACCEPT 2>/dev/null || true",
-        f"    {prefix}iptables -C FORWARD -o \"$docker_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || {prefix}iptables -I FORWARD 1 -o \"$docker_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true",
-        f"    {prefix}iptables -t nat -C POSTROUTING -s \"$docker_subnet\" ! -o \"$docker_if\" -j MASQUERADE 2>/dev/null || {prefix}iptables -t nat -A POSTROUTING -s \"$docker_subnet\" ! -o \"$docker_if\" -j MASQUERADE 2>/dev/null || true",
-        "  fi",
+    if prefix:
+        return [f"{prefix}bash -lc {shlex.quote(wsl_runtime_network_repair_script())}"]
+    return wsl_runtime_network_repair_lines()
+
+def _repair_runtime_internet(serial: str | None = None, quiet: bool = False) -> bool:
+    """Repair host WSL networking and Android DNS for a worker."""
+    if _is_windows():
+        _repair_wsl_main_route_rule()
+    if serial:
+        _repair_wsl_worker_adbd_port(serial)
+        _ensure_adb_connected(serial)
+        _run_adb_text(
+            serial,
+            "shell",
+            "sh",
+            "-lc",
+            android_dns_repair_command(use_wsl_dns_proxy=False),
+            timeout=8,
+        )
+        if _is_windows():
+            _repair_wsl_main_route_rule()
+    ok = True
+    if _is_windows():
+        dns_probe = _linux_run("timeout 10 getent hosts example.com >/dev/null 2>&1", timeout=15, root_user=True)
+        ip_probe = _linux_run(
+            "timeout 8 python3 -c \"import socket; s=socket.create_connection(('example.com',443),5); s.close()\" >/dev/null 2>&1",
+            timeout=10,
+            root_user=True,
+        )
+        ok = ok and dns_probe.returncode == 0 and ip_probe.returncode == 0
+    if serial:
+        dns_prop = _run_adb_text(serial, "shell", "getprop", "net.dns1", timeout=8)
+        boot_prop = _run_adb_text(serial, "shell", "getprop", "sys.boot_completed", timeout=8)
+        state = _run_adb_text(serial, "get-state", timeout=8)
+        ok = ok and state.returncode == 0 and "device" in (state.stdout or "") and (boot_prop.stdout or "").strip() == "1" and bool((dns_prop.stdout or "").strip())
+    if not quiet:
+        _status(ok, "Runtime internet", f"serial={serial}" if serial else "host/Docker")
+    return ok
+
+def _repair_wsl_worker_adbd_port(serial: str) -> None:
+    """Repair per-worker adbd TCP port when WSL host-network ADB is down."""
+    if not _is_windows():
+        return
+    match = re.search(r"(?:wsl:)?127\.0\.0\.1:(\d+)$", serial)
+    if not match:
+        return
+    port = int(match.group(1))
+    try:
+        from . import config
+
+        base_port = int(getattr(config, "REDROID_BASE_PORT", 5600))
+        prefix = str(getattr(config, "REDROID_CONTAINER_PREFIX", "damru-worker-"))
+    except Exception:
+        base_port = 5600
+        prefix = "damru-worker-"
+    index = port - base_port
+    if index < 0 or index > 500:
+        return
+    name = f"{prefix}{index}"
+    script = "\n".join([
+        "set +e",
+        f"name={shlex.quote(name)}",
+        f"port={port}",
+        "[ \"$(docker inspect -f '{{.State.Running}}' \"$name\" 2>/dev/null)\" = true ] || exit 0",
+        "[ \"$(docker inspect -f '{{.HostConfig.NetworkMode}}' \"$name\" 2>/dev/null)\" = host ] || exit 0",
+        "current=$(docker exec \"$name\" getprop service.adb.tcp.port 2>/dev/null | tr -d '\\r')",
+        "if [ \"$current\" != \"$port\" ]; then",
+        "  docker exec \"$name\" setprop service.adb.tcp.port \"$port\" >/dev/null 2>&1 || true",
+        "  docker exec \"$name\" setprop ctl.restart adbd >/dev/null 2>&1 || true",
+        "  sleep 2",
         "fi",
-    ]
+        "docker exec \"$name\" sh -lc \"setprop net.dns1 127.0.0.1; setprop net.dns2 1.1.1.1\" >/dev/null 2>&1 || true",
+    ])
+    _linux_run(script, timeout=20, root_user=True)
 
 
 def _decode_wsl_list_output(data: bytes) -> list[str]:
@@ -521,11 +573,17 @@ def _start_docker_lines(sudo: str = "", attempts: int = 60) -> list[str]:
     return [
         *_preferred_iptables_backend_lines(sudo),
         *_wsl_iptables_sanitize_lines(sudo),
-        f"if ! {docker_info} >/dev/null 2>/dev/null; then {prefix}pkill dockerd 2>/dev/null || true; {prefix}pkill containerd 2>/dev/null || true; {prefix}rm -f /var/run/docker.pid /var/run/docker.sock; fi",
-        "if command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then "
-        f"{prefix}systemctl start docker 2>/dev/null || true; fi",
+        f"if ! {docker_info} >/dev/null 2>/dev/null && command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then",
+        f"  {prefix}systemctl reset-failed docker docker.socket containerd 2>/dev/null || true",
+        f"  {prefix}systemctl start docker.socket 2>/dev/null || true",
+        f"  {prefix}systemctl start containerd 2>/dev/null || true",
+        f"  {prefix}systemctl start docker 2>/dev/null || true",
+        "fi",
         f"if ! {docker_info} >/dev/null 2>/dev/null; then {prefix}service docker start 2>/dev/null || true; fi",
         f"if ! {docker_info} >/dev/null 2>/dev/null; then",
+        f"  {prefix}pkill dockerd 2>/dev/null || true",
+        f"  {prefix}pkill containerd 2>/dev/null || true",
+        f"  {prefix}rm -f /var/run/docker.pid /var/run/docker.sock",
         f"  {prefix}nohup dockerd --host=unix:///var/run/docker.sock >/tmp/damru-dockerd.log 2>/tmp/damru-dockerd.err &",
         f"  for i in {{1..{min(attempts, 15)}}}; do",
         f"    {docker_info} >/dev/null 2>/dev/null && break",
@@ -690,12 +748,17 @@ def _check_env(args: argparse.Namespace) -> int:
         bridge_ok = _docker_bridge_available()
         if bridge_ok:
             detail = (
-                "available; Windows auto mode uses host-network ADB remapping for reliability"
+                "available; Windows auto mode uses bridge networking with published ADB ports"
                 if _is_windows()
                 else "multi-worker Redroid can use mapped ADB ports"
             )
             _status(True, "Docker bridge/NAT networking", detail)
             if _is_windows():
+                _linux_run(
+                    "\n".join(["set +e", *_docker_bridge_nat_repair_lines()]),
+                    timeout=30,
+                    root_user=True,
+                )
                 internet_ok = _docker_bridge_internet_ok(timeout=20)
                 if internet_ok:
                     _status(True, "Docker bridge container internet", "bridge containers can reach 8.8.8.8")
@@ -705,7 +768,7 @@ def _check_env(args: argparse.Namespace) -> int:
         else:
             _warn(
                 "Docker bridge/NAT networking",
-                "unavailable; Damru can use one-worker host-network fallback only",
+                "unavailable; install the supported WSL kernel or repair Docker bridge/NAT",
             )
     elif _is_windows():
         xt_addrtype_ok, xt_detail = _modprobe_detail("xt_addrtype")
@@ -723,11 +786,11 @@ def _check_env(args: argparse.Namespace) -> int:
             failures += 1
             _status(
                 False,
-                "Cross-distro WSL host-network Redroid conflict",
+                "Cross-distro WSL host-network fallback conflict",
                 "stop these containers or use the same WSL distro: " + "; ".join(conflicts),
             )
         else:
-            _status(True, "Cross-distro WSL host-network Redroid conflict", "none detected")
+            _status(True, "Cross-distro WSL host-network fallback conflict", "none detected")
 
     _ensure_binderfs_mounted()
     _ensure_binderfs_mounted()
@@ -1062,11 +1125,11 @@ def _fix_wsl(args: argparse.Namespace) -> int:
             failures += 1
             _status(
                 False,
-                "Cross-distro WSL host-network Redroid conflict",
+                "Cross-distro WSL host-network fallback conflict",
                 "stop these containers or use the same WSL distro: " + "; ".join(conflicts),
             )
         else:
-            _status(True, "Cross-distro WSL host-network Redroid conflict", "none detected")
+            _status(True, "Cross-distro WSL host-network fallback conflict", "none detected")
 
     _ensure_binderfs_mounted()
     binderfs_ok = _linux_run(
@@ -1166,12 +1229,15 @@ def _install_deps(args: argparse.Namespace) -> int:
     sudo_cmd_backend_lines = _preferred_iptables_backend_lines("sudo_cmd")
 
     if _is_windows():
+        wsl_owner = _detect_wsl_user(wsl_distro) or "root"
+        if _is_placeholder_wsl_user(wsl_owner):
+            wsl_owner = "root"
         script_lines = [
             "set -e",
             *_wsl_dns_repair_lines(),
             "apt_update",
             "apt-get install -y android-tools-adb docker.io curl wget git jq cpio gcc iptables kmod ca-certificates acl python3-venv",
-            f"mkdir -p /home/damru && chown {shlex.quote(WSL_USERNAME or 'root')}:{shlex.quote(WSL_USERNAME or 'root')} /home/damru 2>/dev/null || true",
+            f"mkdir -p /home/damru && chown {shlex.quote(wsl_owner)}:{shlex.quote(wsl_owner)} /home/damru 2>/dev/null || true",
             *backend_lines,
             *_restart_docker_lines(),
             "modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
@@ -1194,24 +1260,7 @@ def _install_deps(args: argparse.Namespace) -> int:
             *_restart_docker_lines("sudo_cmd"),
             "sudo_cmd modprobe binder_linux devices=binder,hwbinder,vndbinder 2>/dev/null || true",
             "sudo_cmd modprobe xt_addrtype 2>/dev/null || true",
-            "if ! sudo_cmd docker info >/dev/null 2>/dev/null; then sudo_cmd service docker start 2>/dev/null || true; fi",
-            "if ! sudo_cmd docker info >/dev/null 2>/dev/null; then",
-            "  printf '%s\\n' \"$DAMRU_SUDO_PASSWORD\" | sudo -S nohup dockerd --host=unix:///var/run/docker.sock >/tmp/damru-dockerd.log 2>/tmp/damru-dockerd.err &",
-            "  for i in {1..60}; do",
-            "    sudo_cmd docker info >/dev/null 2>/dev/null && break",
-            "    sleep 2",
-            "  done",
-            "fi",
-            "if ! sudo_cmd docker info >/dev/null 2>/dev/null; then",
-            "  sudo_cmd pkill dockerd 2>/dev/null || true",
-            "  sudo_cmd pkill containerd 2>/dev/null || true",
-            "  sudo_cmd rm -f /var/run/docker.pid /var/run/docker.sock",
-            "  printf '%s\\n' \"$DAMRU_SUDO_PASSWORD\" | sudo -S nohup dockerd --iptables=false --ip6tables=false --bridge=none --host=unix:///var/run/docker.sock >/tmp/damru-dockerd-noiptables.log 2>/tmp/damru-dockerd-noiptables.err &",
-            "  for i in {1..60}; do",
-            "    sudo_cmd docker info >/dev/null 2>/dev/null && break",
-            "    sleep 2",
-            "  done",
-            "fi",
+            *_start_docker_lines("sudo_cmd"),
             "if [ -n \"${USER:-}\" ] && [ -S /var/run/docker.sock ]; then sudo_cmd setfacl -m u:${USER}:rw /var/run/docker.sock 2>/dev/null || sudo_cmd chmod 666 /var/run/docker.sock 2>/dev/null || true; fi",
             "sudo_cmd mkdir -p /dev/binderfs",
             "mount | grep -q ' /dev/binderfs ' || sudo_cmd mount -t binder binder /dev/binderfs",
@@ -1237,7 +1286,7 @@ def _install_deps(args: argparse.Namespace) -> int:
     script = "\n".join(script_lines)
     result = _linux_run(
         script,
-        timeout=600,
+        timeout=1800,
         input_text=input_text,
         root_user=_is_windows(),
     )
@@ -1267,11 +1316,11 @@ def _install_deps(args: argparse.Namespace) -> int:
             failures += 1
             _status(
                 False,
-                "Cross-distro WSL host-network Redroid conflict",
+                "Cross-distro WSL host-network fallback conflict",
                 "stop these containers or use the same WSL distro: " + "; ".join(conflicts),
             )
         else:
-            _status(True, "Cross-distro WSL host-network Redroid conflict", "none detected")
+            _status(True, "Cross-distro WSL host-network fallback conflict", "none detected")
 
     if failures:
         return 1
@@ -1330,8 +1379,6 @@ def _install_deps(args: argparse.Namespace) -> int:
     else:
         pip_result = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="No pyproject.toml near installed package")
     if pip_result.returncode != 0:
-        if pip_result.stderr.strip() and (repo_root / "pyproject.toml").exists():
-            print(pip_result.stderr.strip(), file=sys.stderr)
         print("Editable install unavailable; installing runtime dependencies directly.")
         dep_result = _run_with_env(
             [
@@ -1467,8 +1514,7 @@ def _benchmark(args: argparse.Namespace) -> int:
     if args.debug:
         benchmark_args.append("--debug")
 
-    benchmark_main(benchmark_args)
-    return 0
+    return int(benchmark_main(benchmark_args) or 0)
 
 
 def _bake_image(args: argparse.Namespace) -> int:
@@ -1739,6 +1785,127 @@ def _devices(args: argparse.Namespace) -> int:
     print(_adb_devices_text().strip())
     return 0
 
+def _fix_internet(args: argparse.Namespace) -> int:
+    if getattr(args, "all", False):
+        ok = _repair_runtime_internet(None, quiet=False)
+        serials = _running_damru_worker_serials()
+        seen: set[str] = set()
+        for item in serials:
+            if item in seen:
+                continue
+            seen.add(item)
+            ok = _repair_runtime_internet(item, quiet=False) and ok
+        return 0 if ok else 1
+    serial = _resolve_serial(args.serial) if getattr(args, "serial", None) else None
+    ok = _repair_runtime_internet(serial, quiet=False)
+    return 0 if ok else 1
+
+def _running_damru_worker_serials() -> list[str]:
+    try:
+        from . import config
+
+        prefix = str(getattr(config, "REDROID_CONTAINER_PREFIX", "damru-worker-"))
+        base_port = int(getattr(config, "REDROID_BASE_PORT", 5600))
+    except Exception:
+        prefix = "damru-worker-"
+        base_port = 5600
+    script = f"docker ps --filter name={shlex.quote(prefix)} --format '{{{{.Names}}}}' 2>/dev/null || true"
+    proc = _linux_run(script, timeout=15, root_user=True) if _is_windows() else _run(["bash", "-lc", script], timeout=15)
+    serials: list[str] = []
+    for line in (proc.stdout or "").splitlines():
+        name = line.strip()
+        if not name.startswith(prefix):
+            continue
+        suffix = name.removeprefix(prefix)
+        if suffix.isdigit():
+            serial = f"127.0.0.1:{base_port + int(suffix)}"
+            serials.append(f"wsl:{serial}" if _is_windows() else serial)
+    return sorted(serials, key=lambda item: int(item.rsplit(":", 1)[-1]))
+
+def _random_profile(args: argparse.Namespace) -> int:
+    if getattr(args, "all", False):
+        serials = _running_damru_worker_serials()
+        if not serials:
+            print("No running Damru workers found.", file=sys.stderr)
+            return 1
+        ok = True
+        for serial in serials:
+            code = _random_profile(argparse.Namespace(serial=serial, all=False))
+            ok = ok and code == 0
+        return 0 if ok else 1
+    serial = _resolve_serial(args.serial)
+    if not serial:
+        print("No online ADB device found. Use --serial or start a Redroid device first.", file=sys.stderr)
+        return 1
+    _repair_runtime_internet(serial, quiet=True)
+
+    async def _apply() -> str:
+        from .adb import ADB
+        from .chrome import ChromeManager
+        from .devices import get_random_device
+        from .profiles import build_profile
+        from .proxy import build_accept_language
+        from .root import RootOps
+
+        adb = ADB(serial)
+        real_android = await adb.get_prop("ro.build.version.release")
+        device = get_random_device(android_version=real_android.strip() or None)
+        profile = build_profile(device)
+        root = RootOps(adb)
+        await root.check_root()
+        chrome = ChromeManager(adb)
+        await chrome.detect_package(retries=8, delay=1.0)
+        await chrome.force_stop()
+        await root.apply_device_props(device, safe_only=True, parallel=True)
+        await root.apply_version_release(device)
+        await root.apply_timezone(profile.timezone)
+        await root.apply_locale(profile.locale)
+        await adb.shell(f"wm size {profile.screen_width}x{profile.screen_height}", allow_failure=True)
+        await adb.shell(f"wm density {profile.density_dpi}", allow_failure=True)
+        accept_lang = build_accept_language(profile.locale)
+        await chrome.write_command_line(profile.chrome_flags)
+        await chrome.patch_preferences(profile.locale, accept_lang)
+        await chrome.force_stop()
+        return f"{profile.description}; {profile.screen_width}x{profile.screen_height}@{profile.density_dpi}; tz={profile.timezone}; locale={profile.locale}"
+
+    try:
+        import asyncio
+        detail = asyncio.run(_apply())
+    except Exception as exc:
+        print(f"Random profile failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Random stealth profile applied on {serial}: {detail}")
+    return 0
+
+def _ui_stealth_check_all(args: argparse.Namespace) -> int:
+    serials = _running_damru_worker_serials()
+    if not serials:
+        print("No running Damru workers found.", file=sys.stderr)
+        return 1
+    output_root = Path(args.output_root).expanduser().resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    ok = True
+    for serial in serials:
+        safe = serial.replace(":", "-").replace("/", "-")
+        target = output_root / safe
+        target.mkdir(parents=True, exist_ok=True)
+        print(f"Running stealth checker on {serial}...")
+        code = _benchmark(argparse.Namespace(
+            device=None,
+            serial=serial,
+            proxy=args.proxy,
+            timezone=None,
+            locale=None,
+            tests=None,
+            screenshots=str(target),
+            output=str(target / "proof.json"),
+            debug=False,
+        ))
+        print(f"{serial}: {'OK' if code == 0 else 'FAILED'}")
+        ok = ok and code == 0
+    print(f"Stealth checker all output: {output_root}")
+    return 0 if ok else 1
+
 def _screenshot(args: argparse.Namespace) -> int:
     serial = _resolve_serial(args.serial)
     if not serial:
@@ -1756,6 +1923,218 @@ def _screenshot(args: argparse.Namespace) -> int:
     output.write_bytes(result.stdout)
     print(f"Screenshot saved: {output}")
     return 0
+
+def _chrome_package_installed(serial: str, package: str) -> bool:
+    result = _run_adb_text(serial, "shell", "pm", "path", package, timeout=15)
+    return result.returncode == 0 and f"package:" in (result.stdout or "")
+
+def _ensure_chrome_for_open_url(serial: str, package: str) -> int:
+    if _chrome_package_installed(serial, package):
+        return 0
+
+    chrome_ok, _ = _chrome_apks_available()
+    if not chrome_ok:
+        print("Chrome is not installed on the worker; downloading APK bundle first...", file=sys.stderr)
+        apk_code = _install_apks(argparse.Namespace(
+            zip=None,
+            download=True,
+            url=_DAMRU_APKS_URL,
+            mirror_url=_DAMRU_APKS_MIRROR_URL,
+            output=None,
+            force=False,
+        ))
+        if apk_code != 0:
+            return apk_code
+
+    print("Chrome is not installed on the worker; installing from APK bundle...", file=sys.stderr)
+    try:
+        import asyncio
+
+        from .docker import RedroidManager
+
+        manager = RedroidManager()
+        apk_path = manager.find_chrome_apk()
+        asyncio.run(manager.install_chrome(serial, apk_path))
+    except Exception as exc:
+        print(f"Chrome auto-install failed: {exc}", file=sys.stderr)
+        return 1
+
+    if not _chrome_package_installed(serial, package):
+        print(f"Chrome auto-install finished, but {package} is still not installed.", file=sys.stderr)
+        return 1
+    return 0
+
+def _open_url(args: argparse.Namespace) -> int:
+    serial = _resolve_serial(args.serial)
+    if not serial:
+        print("No online ADB device found. Use --serial or start a Redroid device first.", file=sys.stderr)
+        return 1
+    url = str(args.url or "").strip()
+    if not re.match(r"^https?://", url, re.IGNORECASE):
+        print("--url must start with http:// or https://", file=sys.stderr)
+        return 1
+    _ensure_adb_connected(serial)
+    _repair_runtime_internet(serial, quiet=True)
+    package = str(getattr(args, "package", None) or "com.android.chrome").strip()
+    chrome_code = _ensure_chrome_for_open_url(serial, package)
+    if chrome_code != 0:
+        return chrome_code
+    candidates: list[tuple[str, tuple[str, ...]]] = [
+        (package, ("com.google.android.apps.chrome.Main", "org.chromium.chrome.browser.ChromeTabbedActivity")),
+    ]
+    if package == "com.android.chrome":
+        candidates.extend(
+            [
+                ("com.chrome.beta", ("com.google.android.apps.chrome.Main",)),
+                ("com.chrome.dev", ("com.google.android.apps.chrome.Main",)),
+                ("com.chrome.canary", ("com.google.android.apps.chrome.Main",)),
+                ("org.chromium.chrome", ("org.chromium.chrome.browser.ChromeTabbedActivity", "com.google.android.apps.chrome.Main")),
+            ]
+        )
+
+    result: subprocess.CompletedProcess[str] | None = None
+    launched_package = ""
+    last_error = ""
+    for candidate_package, activities in candidates:
+        for activity_name in activities:
+            activity = f"{candidate_package}/{activity_name}"
+            result = _run_adb_text(
+                serial,
+                "shell",
+                "am",
+                "start",
+                "-W",
+                "--activity-clear-top",
+                "-n",
+                activity,
+                "-a",
+                "android.intent.action.VIEW",
+                "-d",
+                url,
+                timeout=30,
+            )
+            output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+            failed_output = (
+                "Error:" in output
+                or "Error type" in output
+                or "Exception" in output
+                or "does not exist" in output
+                or "not found" in output.lower()
+            )
+            if result.returncode == 0 and not failed_output:
+                launched_package = candidate_package
+                break
+            last_error = output or last_error
+        if launched_package:
+            break
+
+    if not launched_package:
+        print(last_error or "Chrome is not installed or could not handle the URL.", file=sys.stderr)
+        return result.returncode if result else 1
+
+    focus_text = ""
+    deadline = time.time() + 12
+    while time.time() < deadline:
+        focus = _run_adb_text(serial, "shell", "dumpsys", "window", timeout=10)
+        activity = _run_adb_text(serial, "shell", "dumpsys", "activity", "activities", timeout=10)
+        focus_text = "\n".join(part for part in (focus.stdout, focus.stderr, activity.stdout, activity.stderr) if part)
+        if launched_package in focus_text:
+            break
+        time.sleep(0.75)
+    else:
+        print(
+            f"Chrome launch returned success, but Android focus is not {launched_package}. "
+            "Refusing to fall back to WebView or another generic URL handler.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Opened URL in Chrome ({launched_package}) on {serial}: {url}")
+    return 0
+
+def _quick_stealth_check(args: argparse.Namespace) -> int:
+    serial = _resolve_serial(args.serial)
+    if not serial:
+        print("No online ADB device found. Use --serial or start a Redroid device first.", file=sys.stderr)
+        return 1
+    _ensure_adb_connected(serial)
+    _repair_runtime_internet(serial, quiet=True)
+
+    def prop(name: str) -> str:
+        proc = _run_adb_text(serial, "shell", "getprop", name, timeout=8)
+        return (proc.stdout or "").strip()
+
+    def adb_shell(*parts: str) -> str:
+        proc = _run_adb_text(serial, "shell", *parts, timeout=12)
+        return (proc.stdout or proc.stderr or "").strip()
+
+    wm_size = adb_shell("wm", "size")
+    wm_density = adb_shell("wm", "density")
+    checks = {
+        "adb_online": _run_adb_text(serial, "get-state", timeout=8).stdout.strip() == "device",
+        "boot_completed": prop("sys.boot_completed") == "1",
+        "chrome_installed": _chrome_package_installed(serial, "com.android.chrome"),
+        "dns_present": bool(prop("net.dns1")),
+        "timezone_present": bool(prop("persist.sys.timezone")),
+        "locale_present": bool(prop("persist.sys.locale") or prop("persist.sys.language")),
+        "model_present": bool(prop("ro.product.model")),
+        "fingerprint_present": bool(prop("ro.build.fingerprint")),
+    }
+    report = {
+        "serial": serial,
+        "ok": all(checks.values()),
+        "checks": checks,
+        "android": {
+            "brand": prop("ro.product.brand"),
+            "manufacturer": prop("ro.product.manufacturer"),
+            "model": prop("ro.product.model"),
+            "device": prop("ro.product.device"),
+            "release": prop("ro.build.version.release"),
+            "sdk": prop("ro.build.version.sdk"),
+            "fingerprint": prop("ro.build.fingerprint"),
+            "timezone": prop("persist.sys.timezone"),
+            "locale": prop("persist.sys.locale") or "-".join(filter(None, [prop("persist.sys.language"), prop("persist.sys.country")])),
+            "dns1": prop("net.dns1"),
+            "dns2": prop("net.dns2"),
+            "screen": wm_size.splitlines()[-1] if wm_size else "",
+            "density": wm_density.splitlines()[-1] if wm_density else "",
+            "http_proxy": adb_shell("settings", "get", "global", "http_proxy"),
+        },
+    }
+    output = Path(args.output).expanduser().resolve() if args.output else None
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+
+    rows = "".join(
+        f"<tr><td>{html.escape(key)}</td><td class=\"{'ok' if value else 'bad'}\">{'OK' if value else 'FAIL'}</td></tr>"
+        for key, value in checks.items()
+    )
+    js = (
+        "const n=navigator;const rows=["
+        "['webdriver',String(n.webdriver)],['userAgent',n.userAgent],['platform',n.platform],"
+        "['languages',(n.languages||[]).join(', ')],['hardwareConcurrency',String(n.hardwareConcurrency)],"
+        "['deviceMemory',String(n.deviceMemory||'')],['timezone',Intl.DateTimeFormat().resolvedOptions().timeZone],"
+        "['screen',screen.width+'x'+screen.height+' dpr='+devicePixelRatio]];"
+        "document.getElementById('js').innerHTML=rows.map(function(r){return '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>';}).join('');"
+    )
+    page = (
+        "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<title>Damru Quick Checker</title>"
+        "<style>body{font-family:Arial,sans-serif;margin:22px;background:#f7f8f4;color:#121713}table{border-collapse:collapse;width:100%;margin:14px 0;background:white}td{border:1px solid #dbe3d7;padding:9px}.ok{color:#14733c;font-weight:700}.bad{color:#b42318;font-weight:700}code{word-break:break-all}</style>"
+        f"<h1>Damru Quick Checker</h1><p>Serial: <code>{html.escape(serial)}</code></p>"
+        f"<h2>Runtime checks</h2><table>{rows}</table>"
+        f"<h2>Android profile</h2><pre>{html.escape(json.dumps(report['android'], indent=2))}</pre>"
+        f"<h2>Browser JS</h2><table id=js></table><script>{js}</script>"
+    )
+    import urllib.parse
+    data_url = "data:text/html;charset=utf-8," + urllib.parse.quote(page)
+    _run_adb_text(serial, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", data_url, timeout=20)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    if output:
+        print(f"Quick checker report saved: {output}")
+    print("Quick checker page opened in Chrome.")
+    return 0 if report["ok"] else 1
 
 def _record(args: argparse.Namespace) -> int:
     serial = _resolve_serial(args.serial)
@@ -1791,7 +2170,7 @@ def _scrcpy_cmd(serial: str | None, args: argparse.Namespace) -> list[str] | Non
     if exe:
         cmd = [exe]
         if serial:
-            cmd.extend(["--serial", serial])
+            cmd.extend(["--serial", serial[4:] if _is_windows() and serial.startswith("wsl:") else serial])
         if args.no_control:
             cmd.append("--no-control")
         if args.max_size:
@@ -1801,7 +2180,7 @@ def _scrcpy_cmd(serial: str | None, args: argparse.Namespace) -> list[str] | Non
     if _check_command_linux("scrcpy"):
         linux_parts = ["scrcpy"]
         if serial:
-            linux_parts.extend(["--serial", serial])
+            linux_parts.extend(["--serial", serial[4:] if serial.startswith("wsl:") else serial])
         if args.no_control:
             linux_parts.append("--no-control")
         if args.max_size:
@@ -1949,10 +2328,36 @@ def build_parser() -> argparse.ArgumentParser:
     devices = sub.add_parser("devices", help="list ADB devices from Linux/WSL")
     devices.set_defaults(func=_devices)
 
+    fix_internet = sub.add_parser("fix-internet", help="repair WSL/Redroid internet and DNS for a worker")
+    fix_internet.add_argument("--serial", "-s", default=None, help="ADB serial; omitted means host/WSL repair only")
+    fix_internet.add_argument("--all", action="store_true", help="repair host/WSL internet and all online ADB workers")
+    fix_internet.set_defaults(func=_fix_internet)
+
+    random_profile = sub.add_parser("random-profile", help="apply a random stealth profile to an ADB worker")
+    random_profile.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
+    random_profile.add_argument("--all", action="store_true", help="apply random profiles to all running Damru workers")
+    random_profile.set_defaults(func=_random_profile)
+
+    stealth_all = sub.add_parser("ui-stealth-check-all", help=argparse.SUPPRESS)
+    stealth_all.add_argument("--output-root", required=True, help=argparse.SUPPRESS)
+    stealth_all.add_argument("--proxy", default=None, help=argparse.SUPPRESS)
+    stealth_all.set_defaults(func=_ui_stealth_check_all)
+
     shot = sub.add_parser("screenshot", help="capture a PNG screenshot from an ADB device")
     shot.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
     shot.add_argument("--output", "-o", default="damru-screenshot.png", help="output PNG path")
     shot.set_defaults(func=_screenshot)
+
+    quick = sub.add_parser("quick-check", help="run a fast local Android/Chrome stealth sanity check")
+    quick.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
+    quick.add_argument("--output", "-o", default=None, help="optional JSON report path")
+    quick.set_defaults(func=_quick_stealth_check)
+
+    open_url = sub.add_parser("open-url", help="open a URL on an ADB device")
+    open_url.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
+    open_url.add_argument("--url", required=True, help="http:// or https:// URL to open")
+    open_url.add_argument("--package", default="com.android.chrome", help="browser package to launch; default is Chrome")
+    open_url.set_defaults(func=_open_url)
 
     record = sub.add_parser("record", help="record a short MP4 video from an ADB device")
     record.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
@@ -1979,6 +2384,17 @@ def build_parser() -> argparse.ArgumentParser:
     viewer.add_argument("-y", "--yes", action="store_true", help="accepted for non-interactive install scripts")
     viewer.set_defaults(func=_install_viewer)
 
+    ui = sub.add_parser("ui", help="open the local Damru web control panel")
+    ui.add_argument("--port", type=int, default=8765, help="localhost port for the UI")
+    ui.add_argument("--no-open", action="store_true", help="do not open a browser automatically")
+    ui.set_defaults(func=_ui)
+
+    ui_worker = sub.add_parser("ui-worker", help=argparse.SUPPRESS)
+    ui_worker.add_argument("action", choices=["start", "add", "resume", "resume-all", "pause", "delete", "restart", "stop-all", "delete-all"], help=argparse.SUPPRESS)
+    ui_worker.add_argument("--count", type=int, default=None, help=argparse.SUPPRESS)
+    ui_worker.add_argument("--index", type=int, default=0, help=argparse.SUPPRESS)
+    ui_worker.set_defaults(func=_ui_worker)
+
     return parser
 
 
@@ -1986,6 +2402,165 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args) or 0)
+
+
+def _ui(args: argparse.Namespace) -> int:
+    from .ui.server import run_ui
+
+    return run_ui(port=args.port, open_browser=not args.no_open)
+
+
+def _ui_worker(args: argparse.Namespace) -> int:
+    import asyncio
+
+    from . import config
+    from .async_core import DamruError
+    from .docker import RedroidManager
+
+    async def _run() -> int:
+        manager = RedroidManager()
+        async def _existing_workers() -> dict[int, str]:
+            out = await manager._run_cmd(
+                manager._docker_cmd("ps", "-a", "--filter", f"name={config.REDROID_CONTAINER_PREFIX}", "--format", "{{.Names}} {{.State}}"),
+                timeout=10,
+                allow_failure=True,
+            )
+            workers: dict[int, str] = {}
+            for line in out.splitlines():
+                parts = line.strip().split(maxsplit=1)
+                if not parts:
+                    continue
+                name = parts[0]
+                if not name.startswith(config.REDROID_CONTAINER_PREFIX):
+                    continue
+                suffix = name.removeprefix(config.REDROID_CONTAINER_PREFIX)
+                if suffix.isdigit():
+                    workers[int(suffix)] = parts[1] if len(parts) > 1 else "unknown"
+            return workers
+
+        async def _stale_bridge_reuse_indices() -> list[int]:
+            out = await manager._run_cmd(
+                manager._docker_cmd("ps", "-a", "--filter", f"name={config.REDROID_CONTAINER_PREFIX}", "--format", "{{.Names}} {{.State}} {{.Networks}}"),
+                timeout=10,
+                allow_failure=True,
+            )
+            indices: list[int] = []
+            for line in out.splitlines():
+                parts = line.strip().split()
+                if len(parts) < 3:
+                    continue
+                name, state, network = parts[0], parts[1], parts[2]
+                if state == "running" or network != "host" or not name.startswith(config.REDROID_CONTAINER_PREFIX):
+                    continue
+                suffix = name.removeprefix(config.REDROID_CONTAINER_PREFIX)
+                if suffix.isdigit():
+                    indices.append(int(suffix))
+            return sorted(indices)
+
+        async def _existing_indices() -> list[int]:
+            return sorted((await _existing_workers()).keys())
+
+        if args.action == "start":
+            count = int(args.count or getattr(config, "NUM_DEVICES", 1) or 1)
+            if count < 1:
+                raise SystemExit("--count must be >= 1")
+            await manager.check_docker()
+            await manager.validate_redroid_multi_container_support(count)
+            serials = await manager.ensure_all(count)
+            print("Started/reused Damru worker(s):")
+            for serial in serials:
+                print(f"  {serial}")
+            return 0
+        if args.action == "add":
+            add_count = int(args.count or 1)
+            if add_count < 1:
+                raise SystemExit("--count must be >= 1")
+            await manager.check_docker()
+            added: list[tuple[int, str]] = []
+            workers = await _existing_workers()
+            indices = set(workers)
+            index = 0
+            stale = await _stale_bridge_reuse_indices()
+            for _ in range(add_count):
+                if stale:
+                    index = stale.pop(0)
+                    indices.discard(index)
+                else:
+                    while index in indices:
+                        index += 1
+                await manager.validate_redroid_multi_container_support(index + 1)
+                serial = await manager.ensure_container(index)
+                added.append((index, serial))
+                indices.add(index)
+                index += 1
+            print("Added Damru worker(s):")
+            for index, serial in added:
+                print(f"  {index}: {serial}")
+            return 0
+        if args.action == "resume":
+            index = int(args.index)
+            await manager.check_docker()
+            await manager.validate_redroid_multi_container_support(index + 1)
+            serial = await manager.ensure_container(index)
+            print(f"Started Damru worker {index}: {serial}")
+            return 0
+        if args.action == "resume-all":
+            await manager.check_docker()
+            workers = await _existing_workers()
+            if not workers:
+                count = int(args.count or getattr(config, "NUM_DEVICES", 1) or 1)
+                await manager.validate_redroid_multi_container_support(count)
+                serials = await manager.ensure_all(count)
+                print("Started Damru worker(s):")
+                for serial in serials:
+                    print(f"  {serial}")
+                return 0
+            resumed: list[tuple[int, str]] = []
+            for index, state in sorted(workers.items()):
+                if state == "running":
+                    continue
+                await manager.validate_redroid_multi_container_support(index + 1)
+                serial = await manager.ensure_container(index)
+                resumed.append((index, serial))
+            if resumed:
+                print("Started stopped Damru worker(s):")
+                for index, serial in resumed:
+                    print(f"  {index}: {serial}")
+            else:
+                print("All existing Damru workers are already running")
+            return 0
+        if args.action == "pause":
+            index = int(args.index)
+            name = f"{config.REDROID_CONTAINER_PREFIX}{index}"
+            await manager._run_cmd(manager._docker_cmd("stop", name), timeout=30, allow_failure=True)
+            print(f"Stopped Damru worker {index}; container kept")
+            return 0
+        if args.action == "delete":
+            await manager.stop_container(int(args.index))
+            print(f"Deleted Damru worker {int(args.index)}")
+            return 0
+        if args.action == "restart":
+            serial = await manager.restart_container(int(args.index))
+            print(f"Restarted Damru worker {int(args.index)}: {serial}")
+            return 0
+        if args.action == "stop-all":
+            indices = await _existing_indices()
+            for index in indices:
+                name = f"{config.REDROID_CONTAINER_PREFIX}{index}"
+                await manager._run_cmd(manager._docker_cmd("stop", name), timeout=30, allow_failure=True)
+            print("Stopped all Damru worker containers; containers kept")
+            return 0
+        if args.action == "delete-all":
+            await manager.cleanup_orphans()
+            print("Deleted all Damru worker containers")
+            return 0
+        raise SystemExit(f"Unsupported worker action: {args.action}")
+
+    try:
+        return asyncio.run(_run())
+    except DamruError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

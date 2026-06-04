@@ -8,6 +8,7 @@ setup(
         "damru.playwright_patch": ["*.js"],
         "damru.wsl_kernel": ["wsl2-kernel-*", "*.config", "SHA256SUMS", "README.md", "source_metadata/*"],
         "damru.assets": ["magisk.apk", "libfakemem.c"],
+        "damru.ui": ["static/*"],
     },
     install_requires=[
         "playwright>=1.40,<1.60",

@@ -34,7 +34,7 @@ class ChromeManager:
         self.adb = adb
         self.package = package or "com.android.chrome"
 
-    async def detect_package(self, retries: int = 10, delay: float = 3.0) -> str:
+    async def detect_package(self, retries: int = 30, delay: float = 2.0) -> str:
         """Find which Chrome variant is installed.
 
         Retries because package manager may not be fully initialised immediately
@@ -47,7 +47,7 @@ class ChromeManager:
                 if pkg in installed:
                     self.package = pkg
                     return pkg
-            if attempt < retries - 1 and not installed:
+            if attempt < retries - 1:
                 # Package manager not ready yet — wait and retry
                 logger.debug("Package manager not ready (attempt %d/%d), waiting %.0fs…", attempt + 1, retries, delay)
                 await sleep(delay)
@@ -92,11 +92,19 @@ class ChromeManager:
 
         # Build final flag list with merged disable-features
         final_flags = other_flags[:]
+        if not any(
+            flag.startswith("--remote-debugging-socket-name=")
+            or flag.startswith("--remote-debugging-port=")
+            for flag in final_flags
+        ):
+            final_flags.append("--remote-debugging-socket-name=chrome_devtools_remote")
         if disable_features:
             final_flags.append(f"--disable-features={','.join(disable_features)}")
 
-        # Write to command-line file (first token ignored by Chrome)
-        cmd_line = "_ " + " ".join(final_flags)
+        # Android Chrome expects argv[0] to look like a browser binary name.
+        # Some builds tolerate any placeholder, but Chrome 145 on Redroid only
+        # honored remote debugging when this token was `chrome`.
+        cmd_line = "chrome " + " ".join(final_flags)
 
         # Write via printf to avoid shell quoting issues with echo
         # Escape special chars for shell
@@ -114,12 +122,53 @@ class ChromeManager:
         fresh profile data and render the FRE screen (~4s).
         On warm reuse (no pm clear), Chrome starts faster (~2s).
         """
-        activity = f"{self.package}/com.google.android.apps.chrome.Main"
-        await self.adb.shell(
-            f"am start -n {activity} -a android.intent.action.VIEW -d {url}",
-            allow_failure=True,
-        )
+        package = await self.detect_package(retries=30, delay=2.0)
+        activities = [
+            "com.google.android.apps.chrome.Main",
+            "org.chromium.chrome.browser.ChromeTabbedActivity",
+            "org.chromium.chrome.browser.ChromeTabbedActivity2",
+        ]
+        last_error = ""
+        launched = False
+        for launch_probe in range(4):
+            for activity_name in activities:
+                activity = f"{package}/{activity_name}"
+                out = await self.adb.shell(
+                    f"am start -W --activity-clear-top -n {activity} -a android.intent.action.VIEW -d {url}",
+                    allow_failure=True,
+                )
+                failed = (
+                    "Error:" in out
+                    or "Error type" in out
+                    or "Exception" in out
+                    or "does not exist" in out
+                    or "not found" in out.lower()
+                )
+                if not failed:
+                    launched = True
+                    break
+                last_error = out.strip() or last_error
+            if launched:
+                break
+            if launch_probe < 3:
+                await sleep(3.0)
+        if not launched:
+            raise ChromeError(f"Chrome launch failed for {package}: {last_error or '<no output>'}")
         await sleep(startup_delay)
+        focus = ""
+        for _ in range(12):
+            focus = await self.adb.shell(
+                "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'; "
+                "dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' | head",
+                allow_failure=True,
+            )
+            if package in focus:
+                break
+            await sleep(1.0)
+        else:
+            raise ChromeError(
+                f"Chrome launch did not focus {package}. Android focus output: {focus.strip() or '<empty>'}"
+            )
 
     async def dismiss_fre(self, max_attempts: int = 8) -> bool:
         """Dismiss Chrome First Run Experience using uiautomator.

@@ -108,6 +108,9 @@ def _build_chrome_flags(
         "--disable-fre",
         "--no-first-run",
         "--no-default-browser-check",
+        # Android CDP attaches through this localabstract socket. Without it,
+        # Chrome may visibly launch but Playwright cannot connect.
+        "--remote-debugging-socket-name=chrome_devtools_remote",
         # Stealth
         "--disable-blink-features=AutomationControlled",
         "--disable-popup-blocking",

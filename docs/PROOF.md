@@ -26,7 +26,7 @@ Result:
 - Chrome APK discovery: OK
 - Redroid image available: OK
 - scrcpy viewer command: OK
-- Cross-distro host-network Redroid conflict: none detected
+- Cross-distro host-network fallback conflict: none detected
 
 Browser smoke:
 

@@ -536,19 +536,23 @@ python -m damru setup           # guided first-run setup and config writer
 python -m damru check-env       # validate Linux/WSL dependencies and assets
 python -m damru install-deps    # install common Linux/WSL dependencies
 python -m damru fix-wsl         # retry safe WSL Docker/binderfs/netfilter fixes
+python -m damru fix-internet    # repair WSL/Docker/Android DNS and internet checks
 python -m damru wsl-kernel status # inspect bundled/active WSL kernel state
 python -m damru benchmark       # run the benchmark command
 python -m damru bake-image      # bake a warm Redroid image
 python -m damru devices         # list ADB devices from Linux/WSL
+python -m damru open-url        # open a URL in Android Chrome on one ADB worker
+python -m damru quick-check     # run a fast local Android/Chrome sanity check
 python -m damru screenshot      # capture Android display PNG through ADB
 python -m damru record          # capture Android display MP4 through ADB
 python -m damru view            # open optional scrcpy live viewer
 python -m damru install-viewer  # check/install optional scrcpy tooling
+python -m damru ui              # open the experimental local web dashboard
 ```
 
-For testing a separate WSL distro without changing `config.py`, set `DAMRU_WSL_DISTRO`, for example: `$env:DAMRU_WSL_DISTRO="DamruFreshKernelTest"`. Do not run host-network Redroid workers in multiple WSL distros at the same time; `check-env` reports this conflict.
+For testing a separate WSL distro without changing `config.py`, set `DAMRU_WSL_DISTRO`, for example: `$env:DAMRU_WSL_DISTRO="DamruFreshKernelTest"`. If another local Damru runtime already owns ADB ports `5600+`, set `DAMRU_REDROID_BASE_PORT`, for example: `$env:DAMRU_REDROID_BASE_PORT="5700"`. Use one dedicated WSL distro for normal Damru Redroid work.
 
-> **WSL custom kernel safety:** On Windows, Damru recommends using a fresh/dedicated WSL distro for Redroid. The bundled kernel installer edits `%USERPROFILE%\.wslconfig`, which changes how WSL boots. Damru backs up `.wslconfig`, but a custom WSL kernel can still break Docker/networking/modules or other WSL workloads. Interactive installs require typing the full warning phrase; scripted installs require `--confirm-wsl-kernel-risk` in addition to `--yes`. Native Linux/Ubuntu does not use this WSL kernel installer.
+> **WSL custom kernel safety:** On Windows, Damru recommends using a fresh/dedicated WSL distro for Redroid. The bundled kernel installer edits `%USERPROFILE%\.wslconfig`, which changes how WSL boots. Damru backs up `.wslconfig`, but a custom WSL kernel can still break Docker/networking/modules or other WSL workloads. The UI requires typing `yes`; scripted installs require `--confirm-wsl-kernel-risk` in addition to `--yes`. Native Linux/Ubuntu does not use this WSL kernel installer.
 
 On Windows, `setup`/`install-deps` run inside WSL as root and do not use native Windows Docker. On native Linux scripted setup where sudo cannot prompt interactively, pass one password line on stdin:
 
@@ -558,6 +562,16 @@ printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-pass
 ```
 
 For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
+
+### Experimental Local UI
+
+Damru includes an experimental localhost dashboard for setup, worker management, browser actions, quick checks, screenshots, logs, gallery cleanup, and a browser-based live viewer:
+
+```bash
+python -m damru ui
+```
+
+Open the printed `http://127.0.0.1:<port>` URL. The UI is local-only by default and uses an allowlisted backend; it does not expose arbitrary shell execution. The dashboard shows WSL controls only on Windows and native Ubuntu controls on Linux. For smoother manual control, use **Copy native command** in Work Lab and paste it in a terminal to launch `scrcpy` for the selected worker.
 
 ### Use Redroid Like an Emulator Window
 

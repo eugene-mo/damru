@@ -45,6 +45,7 @@ from .config import (
     WSL_DISTRO,
     WSL_USERNAME,
 )
+from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines
 from .utils import logger
 
 _CHROME_APK_AUTO_SKIP_VERSIONS = {
@@ -179,9 +180,7 @@ class RedroidManager:
         if self._is_windows:
             if use_host_network:
                 return self._make_wsl_serial("127.0.0.1", port)
-            ip = await self._get_container_ip(name)
-            if ip:
-                return self._make_wsl_serial(ip, 5555)
+            return self._make_wsl_serial("127.0.0.1", port)
         await self._get_adb_host()
         return self._make_serial(port)
 
@@ -217,9 +216,17 @@ class RedroidManager:
         """
         script = "\n".join([
             "set +e",
-            "if command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then systemctl start docker 2>/dev/null || true; fi",
+            "if ! docker info >/dev/null 2>/dev/null && command -v systemctl >/dev/null 2>&1 && [ \"$(ps -p 1 -o comm= 2>/dev/null)\" = systemd ]; then",
+            "  systemctl reset-failed docker docker.socket containerd 2>/dev/null || true",
+            "  systemctl start docker.socket 2>/dev/null || true",
+            "  systemctl start containerd 2>/dev/null || true",
+            "  systemctl start docker 2>/dev/null || true",
+            "fi",
             "if ! docker info >/dev/null 2>/dev/null; then service docker start 2>/dev/null || true; fi",
             "if ! docker info >/dev/null 2>/dev/null; then",
+            "  pkill dockerd 2>/dev/null || true",
+            "  pkill containerd 2>/dev/null || true",
+            "  rm -f /var/run/docker.pid /var/run/docker.sock",
             "  nohup dockerd --host=unix:///var/run/docker.sock >/tmp/damru-dockerd.log 2>/tmp/damru-dockerd.err &",
             "  for i in {1..15}; do",
             "    docker info >/dev/null 2>/dev/null && break",
@@ -241,21 +248,8 @@ class RedroidManager:
         return self._wsl_sudo_cmd(script)
 
     def _docker_bridge_nat_repair_script_lines(self) -> List[str]:
-        """Targeted WSL Docker bridge repair without flushing user rules."""
-        return [
-            "if docker info >/dev/null 2>/dev/null && docker network inspect bridge >/dev/null 2>/dev/null; then",
-            "  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true",
-            "  docker_subnet=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Subnet}}' 2>/dev/null)",
-            "  docker_if=$(docker network inspect bridge --format '{{.Options.com.docker.network.bridge.name}}' 2>/dev/null)",
-            "  [ -n \"$docker_if\" ] || docker_if=docker0",
-            "  [ \"$docker_if\" != \"<no value>\" ] || docker_if=docker0",
-            "  if [ -n \"$docker_subnet\" ] && ip link show \"$docker_if\" >/dev/null 2>&1; then",
-            "    iptables -C FORWARD -i \"$docker_if\" -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -i \"$docker_if\" -j ACCEPT 2>/dev/null || true",
-            "    iptables -C FORWARD -o \"$docker_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I FORWARD 1 -o \"$docker_if\" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true",
-            "    iptables -t nat -C POSTROUTING -s \"$docker_subnet\" ! -o \"$docker_if\" -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s \"$docker_subnet\" ! -o \"$docker_if\" -j MASQUERADE 2>/dev/null || true",
-            "  fi",
-            "fi",
-        ]
+        """Targeted WSL Docker bridge repair after host-network Android rules."""
+        return wsl_runtime_network_repair_lines()
 
     async def _repair_docker_bridge_nat(self) -> None:
         if not self._is_windows:
@@ -407,18 +401,26 @@ class RedroidManager:
         return conflicts
 
     def _should_use_host_network(self) -> bool:
-        """Use host networking for Windows Redroid ADB reliability.
+        """Return True when Redroid should share the WSL host network.
 
-        WSL Docker bridge/NAT can accept TCP on a published port while Redroid
-        adbd remains offline. Host networking plus per-container adbd port
-        remapping avoids that ADB transport failure and still supports multiple
-        workers when containers are started sequentially.
+        WSL host networking lets Android netd mutate the WSL namespace
+        directly, which repeatedly breaks eth0/default route/DNS. Docker bridge
+        keeps Android networking isolated while published ADB ports remain
+        reachable from the WSL-side adb client.
         """
-        return self._is_windows
+        return False
 
     async def _container_network_mode(self, name: str) -> str:
         out = await self._run_cmd(
             self._docker_cmd("inspect", "-f", "{{.HostConfig.NetworkMode}}", name),
+            timeout=10,
+            allow_failure=True,
+        )
+        return out.strip()
+
+    async def _container_entrypoint_path(self, name: str) -> str:
+        out = await self._run_cmd(
+            self._docker_cmd("inspect", "-f", "{{.Path}}", name),
             timeout=10,
             allow_failure=True,
         )
@@ -674,6 +676,16 @@ class RedroidManager:
             return
 
         if image == REDROID_IMAGE:
+            local_tar = Path(__file__).resolve().parent.parent / "damru-redroid-latest.tar"
+            if local_tar.exists():
+                logger.info("Loading baked image %s from %s", image, local_tar)
+                tar_arg = self._to_wsl_path(str(local_tar)) if self._is_windows else str(local_tar)
+                await self._run_cmd(
+                    self._docker_cmd("load", "-i", tar_arg),
+                    timeout=1200,
+                )
+                if await self._image_exists(image):
+                    return
             logger.warning(
                 "Baked image %s missing — pulling base %s as unbaked fallback",
                 image, REDROID_BASE_IMAGE,
@@ -716,6 +728,18 @@ class RedroidManager:
             return status
         return "none"
 
+    def _boot_timeout_for_index(self, index: int) -> float:
+        """Return a realistic Redroid boot timeout for the requested worker.
+
+        WSL host-network workers are started sequentially but share CPU and I/O
+        with every already-running Android userspace. Higher indexes can be
+        healthy yet take longer than the default single-worker timeout before
+        `sys.boot_completed` flips.
+        """
+        if self._is_windows and self._should_use_host_network():
+            return float(max(CONTAINER_BOOT_TIMEOUT, min(600, CONTAINER_BOOT_TIMEOUT + (max(0, index) * 30))))
+        return float(CONTAINER_BOOT_TIMEOUT)
+
     async def ensure_container(self, index: int) -> str:
         """Ensure container exists and is running. Reuses if possible.
 
@@ -728,6 +752,7 @@ class RedroidManager:
         name = f"{REDROID_CONTAINER_PREFIX}{index}"
         port = REDROID_BASE_PORT + index
         use_host_network = self._should_use_host_network()
+        boot_timeout = self._boot_timeout_for_index(index)
         if use_host_network:
             conflicts = await self._detect_cross_distro_host_redroid_conflict()
             if conflicts:
@@ -742,24 +767,39 @@ class RedroidManager:
 
         if state != "none":
             network_mode = await self._container_network_mode(name)
-            if use_host_network and network_mode != "host":
-                logger.warning("Recreating %s with host networking for reliable Redroid ADB", name)
+            if (use_host_network and network_mode != "host") or (not use_host_network and network_mode == "host"):
+                target = "host" if use_host_network else "bridge"
+                logger.warning("Recreating %s with %s networking", name, target)
                 await self.stop_container(index)
                 state = "none"
 
         if state == "running":
+            if use_host_network:
+                entrypoint = await self._container_entrypoint_path(name)
+                if entrypoint != "/damru-redroid-init":
+                    logger.info("Recreating running stale WSL host-network container %s with Damru init wrapper", name)
+                    await self._run_cmd(
+                        self._docker_cmd("rm", "-f", name),
+                        timeout=15,
+                        allow_failure=True,
+                    )
+                    return await self.start_container(index)
             # Container already running — just ensure ADB connected
             logger.info("Reusing running container %s", name)
             if use_host_network:
-                await self._wait_for_container_boot_internal(name, timeout=CONTAINER_BOOT_TIMEOUT)
+                await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
                 await self._remap_adbd_port(name, port)
-                await self._ensure_wsl_main_route_rule()
+                await self._repair_docker_bridge_nat()
             serial = await self._serial_for_container(name, port, use_host_network)
             await self._run_cmd(
                 self._adb_cmd("connect", serial),
                 timeout=10, allow_failure=True,
             )
-            await self._wait_for_boot(serial, name=name, timeout=CONTAINER_BOOT_TIMEOUT)
+            await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
+            await self._repair_docker_bridge_nat()
+            if not await self._android_dns_usable(serial):
+                logger.warning("Recreating %s because Android DNS is not usable", name)
+                return await self.restart_container(index)
             try:
                 await self._wait_for_package_service(serial, timeout=60)
             except DamruError as exc:
@@ -770,6 +810,16 @@ class RedroidManager:
             return serial
 
         elif state in ("exited", "created", "paused"):
+            if use_host_network and state in {"exited", "created"}:
+                entrypoint = await self._container_entrypoint_path(name)
+                if entrypoint != "/damru-redroid-init":
+                    logger.info("Recreating stale WSL host-network container %s with Damru init wrapper", name)
+                    await self._run_cmd(
+                        self._docker_cmd("rm", "-f", name),
+                        timeout=15,
+                        allow_failure=True,
+                    )
+                    return await self.start_container(index)
             # Container exists but stopped — restart it
             logger.info("Restarting stopped container %s...", name)
             await self._run_cmd(
@@ -777,15 +827,19 @@ class RedroidManager:
                 timeout=30, allow_failure=True,
             )
             if use_host_network:
-                await self._wait_for_container_boot_internal(name, timeout=CONTAINER_BOOT_TIMEOUT)
+                await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
                 await self._remap_adbd_port(name, port)
-                await self._ensure_wsl_main_route_rule()
+                await self._repair_docker_bridge_nat()
             serial = await self._serial_for_container(name, port, use_host_network)
             await self._run_cmd(
                 self._adb_cmd("connect", serial),
                 timeout=10, allow_failure=True,
             )
-            await self._wait_for_boot(serial, name=name, timeout=CONTAINER_BOOT_TIMEOUT)
+            await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
+            await self._repair_docker_bridge_nat()
+            if not await self._android_dns_usable(serial):
+                logger.warning("Recreating %s because Android DNS is not usable", name)
+                return await self.restart_container(index)
             try:
                 await self._wait_for_package_service(serial, timeout=60)
             except DamruError as exc:
@@ -809,6 +863,7 @@ class RedroidManager:
             serials = []
             for i in range(count):
                 serials.append(await self.ensure_container(i))
+            await self._repair_docker_bridge_nat()
             return serials
 
         ensure_tasks = [self.ensure_container(i) for i in range(count)]
@@ -819,11 +874,79 @@ class RedroidManager:
         """Disabled — never delete containers, always reuse."""
         return
 
+    async def _ensure_wsl_redroid_pid_shift_wrapper(self) -> str:
+        """Build the WSL host-network Redroid init wrapper if needed.
+
+        Redroid's vold binds a netlink uevent socket using its process id as
+        the port id. In Docker host-network mode, containers share the network
+        namespace but keep separate PID namespaces, so multiple Redroid
+        containers can reuse low internal PIDs and vold can fail with
+        EADDRINUSE. The wrapper reserves low internal PIDs before execing
+        Android init, keeping host networking while avoiding that collision.
+        """
+        if not self._is_windows:
+            raise DamruError("The Redroid PID-shift wrapper is only needed on WSL")
+
+        target = "/home/damru/bin/redroid-pid-shift"
+        script = r'''
+set -e
+target=/home/damru/bin/redroid-pid-shift
+source=/home/damru/bin/redroid_pid_shift.c
+mkdir -p /home/damru/bin
+if [ -x "$target" ]; then exit 0; fi
+if ! command -v gcc >/dev/null 2>&1; then
+  echo "gcc is required to build Damru's WSL Redroid init wrapper. Run python -m damru install-deps -y." >&2
+  exit 127
+fi
+cat > "$source" <<'C'
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main(int argc, char **argv) {
+    int count = 96;
+    const char *env = getenv("DAMRU_PID_SHIFT_COUNT");
+    if (env && *env) {
+        int parsed = atoi(env);
+        if (parsed > 0 && parsed < 1000) count = parsed;
+    }
+    for (int i = 0; i < count; i++) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            for (;;) sleep(86400);
+            return 0;
+        }
+    }
+    char **init_args = calloc((size_t)argc + 1, sizeof(char *));
+    if (!init_args) {
+        fprintf(stderr, "calloc failed\n");
+        return 126;
+    }
+    init_args[0] = "/init";
+    for (int i = 1; i < argc; i++) init_args[i] = argv[i];
+    init_args[argc] = NULL;
+    execv("/init", init_args);
+    fprintf(stderr, "execv /init failed: %s\n", strerror(errno));
+    return 127;
+}
+C
+gcc -O2 -static -o "$target" "$source"
+chmod 755 "$target"
+'''
+        await self._run_cmd(
+            self._wsl_sudo_cmd(script),
+            timeout=60,
+        )
+        return target
+
     async def start_container(self, index: int) -> str:
         """Start one redroid container and return its ADB serial."""
         name = f"{REDROID_CONTAINER_PREFIX}{index}"
         port = REDROID_BASE_PORT + index
         use_host_network = self._should_use_host_network()
+        boot_timeout = self._boot_timeout_for_index(index)
         # Ensure the launch image exists before docker run (auto-pull/tag)
         await self.ensure_image(REDROID_IMAGE)
 
@@ -841,11 +964,18 @@ class RedroidManager:
         boot_args = [
             "androidboot.use_memfd=true",
             f"androidboot.redroid_gpu_mode={REDROID_GPU_MODE}",
+            "androidboot.redroid_net_ndns=2",
             "androidboot.redroid_net_dns1=1.1.1.1",
             "androidboot.redroid_net_dns2=8.8.8.8",
         ]
         if REDROID_SETUPWIZARD_DISABLED:
             boot_args.append("ro.setupwizard.mode=DISABLED")
+
+        init_args = boot_args
+        pid_shift_wrapper = ""
+        if use_host_network and self._is_windows:
+            pid_shift_wrapper = await self._ensure_wsl_redroid_pid_shift_wrapper()
+            init_args = ["qemu=1", "androidboot.hardware=redroid", *boot_args]
 
         run_args = [
             "run", "-d",
@@ -859,34 +989,55 @@ class RedroidManager:
         if use_host_network:
             logger.info("Using host networking with adbd remapped to port %d", port)
             run_args.extend(["--network", "host"])
+            if pid_shift_wrapper:
+                run_args.extend([
+                    "-e", f"DAMRU_PID_SHIFT_COUNT={96 + (index * 64)}",
+                    "-v", f"{pid_shift_wrapper}:/damru-redroid-init:ro",
+                    "--entrypoint", "/damru-redroid-init",
+                ])
         else:
             run_args.extend(["-p", f"{port}:5555"])
-        run_args.extend([REDROID_IMAGE, *boot_args])
+        run_args.extend([REDROID_IMAGE, *init_args])
 
         await self._run_cmd(
             self._docker_cmd(*run_args),
             timeout=60,
         )
 
-        self._started_indices.append(index)
-        if use_host_network:
-            await self._wait_for_container_boot_internal(name, timeout=CONTAINER_BOOT_TIMEOUT)
-            await self._remap_adbd_port(name, port)
-            await self._ensure_wsl_main_route_rule()
-        serial = await self._serial_for_container(name, port, use_host_network)
+        try:
+            if use_host_network:
+                await self._wait_for_container_boot_internal(name, timeout=boot_timeout)
+                await self._remap_adbd_port(name, port)
+                await self._repair_docker_bridge_nat()
+            serial = await self._serial_for_container(name, port, use_host_network)
 
-        # Connect ADB. On Windows, Redroid ADB runs inside WSL because direct
-        # Windows ADB over Docker-published ports can stay stuck offline.
-        await self._run_cmd(
-            self._adb_cmd("connect", serial),
-            timeout=10, allow_failure=True,
-        )
+            # Connect ADB. On Windows, Redroid ADB runs inside WSL because direct
+            # Windows ADB over Docker-published ports can stay stuck offline.
+            await self._run_cmd(
+                self._adb_cmd("connect", serial),
+                timeout=10, allow_failure=True,
+            )
 
-        # Wait for boot
-        logger.info("Waiting for %s to boot...", name)
-        await self._wait_for_boot(serial, name=name, timeout=CONTAINER_BOOT_TIMEOUT)
-        await self._wait_for_package_service(serial, timeout=90)
+            # Wait for boot
+            logger.info("Waiting for %s to boot...", name)
+            await self._wait_for_boot(serial, name=name, timeout=boot_timeout)
+            await self._repair_docker_bridge_nat()
+            if not await self._android_dns_boot_ready(serial) and not await self._android_dns_usable(serial):
+                raise DamruError(f"Android DNS did not initialize on {serial}")
+            await self._wait_for_package_service(serial, timeout=90)
+        except Exception as exc:
+            diagnostics = await self._container_boot_diagnostics(name)
+            await self._run_cmd(
+                self._docker_cmd("rm", "-f", name),
+                timeout=15,
+                allow_failure=True,
+            )
+            if diagnostics:
+                raise DamruError(f"{exc}\n\nContainer diagnostics for {name}:\n{diagnostics}") from exc
+            raise
 
+        if index not in self._started_indices:
+            self._started_indices.append(index)
         return serial
 
     async def start_all(self, count: int) -> List[str]:
@@ -895,6 +1046,7 @@ class RedroidManager:
             serials = []
             for i in range(count):
                 serials.append(await self.start_container(i))
+            await self._repair_docker_bridge_nat()
             return serials
         tasks = [self.start_container(i) for i in range(count)]
         return await asyncio.gather(*tasks)
@@ -918,6 +1070,9 @@ class RedroidManager:
                 if out.strip() == "1":
                     logger.info("Container %s booted (%.0fs)", serial, elapsed)
                     return
+                if elapsed >= 30 and await self._android_services_stable_adb(serial):
+                    logger.info("Container %s Android services are ready before boot flag (%.0fs)", serial, elapsed)
+                    return
             except Exception:
                 pass
             if name:
@@ -932,6 +1087,9 @@ class RedroidManager:
                     probe = await self._run_cmd(adb_cmd, timeout=5, allow_failure=True)
                     if probe.strip() == "1":
                         return
+                if elapsed >= 30 and await self._android_services_stable_internal(name):
+                    logger.info("Container %s Android services are ready internally before boot flag (%.0fs)", name, elapsed)
+                    return
             await asyncio.sleep(interval)
             elapsed += interval
 
@@ -942,6 +1100,12 @@ class RedroidManager:
         out = await self._run_cmd(adb_cmd, timeout=10, allow_failure=True)
         if out.strip() == "1":
             logger.info("Container %s booted after final reconnect", serial)
+            return
+        if await self._android_services_stable_adb(serial):
+            logger.info("Container %s Android services are ready after final reconnect", serial)
+            return
+        if name and await self._android_services_stable_internal(name):
+            logger.info("Container %s Android services are ready internally after final reconnect", name)
             return
 
         raise DamruError(f"Container {serial} failed to boot within {timeout}s")
@@ -962,9 +1126,160 @@ class RedroidManager:
             if out.strip() == "1":
                 logger.info("Container %s booted internally (%.0fs)", name, elapsed)
                 return
+            if elapsed >= 30 and await self._android_services_stable_internal(name):
+                logger.info("Container %s Android services are ready before boot flag (%.0fs)", name, elapsed)
+                return
+            state = await self._run_cmd(
+                self._docker_cmd("inspect", "-f", "{{.State.Status}} {{.State.ExitCode}}", name),
+                timeout=5,
+                allow_failure=True,
+            )
+            parts = state.strip().split()
+            if parts and parts[0] == "exited":
+                exit_code = parts[1] if len(parts) > 1 else "unknown"
+                hint = ""
+                if self._is_windows and exit_code == "129":
+                    hint = (
+                        " In WSL host-network mode this commonly means Android vold could not bind "
+                        "the uevent socket because this host cannot run another Redroid worker concurrently. "
+                        "Stop/delete another worker or reduce the requested worker total."
+                    )
+                raise DamruError(f"Container {name} exited during Android boot (exit {exit_code}).{hint}")
             await asyncio.sleep(interval)
             elapsed += interval
         raise DamruError(f"Container {name} failed to boot internally within {timeout}s")
+
+    async def _android_services_ready_internal(self, name: str) -> bool:
+        script = " && ".join([
+            "pidof system_server >/dev/null",
+            "service check activity | grep -q found",
+            "service check activity_task | grep -q found",
+            "service check package | grep -q found",
+            "service check webviewupdate | grep -q found",
+            "echo ready",
+        ])
+        out = await self._run_cmd(
+            self._docker_cmd("exec", name, "sh", "-lc", script),
+            timeout=8,
+            allow_failure=True,
+        )
+        return out.strip() == "ready"
+
+    async def _android_services_stable_internal(self, name: str, checks: int = 3) -> bool:
+        for attempt in range(checks):
+            if not await self._android_services_ready_internal(name):
+                return False
+            if attempt < checks - 1:
+                await asyncio.sleep(3)
+        return True
+
+    async def _android_services_ready_adb(self, serial: str) -> bool:
+        script = " && ".join([
+            "pidof system_server >/dev/null",
+            "service check activity | grep -q found",
+            "service check activity_task | grep -q found",
+            "service check package | grep -q found",
+            "service check webviewupdate | grep -q found",
+            "echo ready",
+        ])
+        out = await self._run_cmd(
+            self._adb_cmd("shell", "sh", "-lc", script, serial=serial),
+            timeout=8,
+            allow_failure=True,
+        )
+        return out.strip() == "ready"
+
+    async def _android_services_stable_adb(self, serial: str, checks: int = 3) -> bool:
+        for attempt in range(checks):
+            if not await self._android_services_ready_adb(serial):
+                return False
+            if attempt < checks - 1:
+                await asyncio.sleep(3)
+        return True
+
+    async def _container_boot_diagnostics(self, name: str) -> str:
+        checks = [
+            ("inspect", self._docker_cmd("inspect", "-f", "status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}} started={{.State.StartedAt}} finished={{.State.FinishedAt}}", name), 8),
+            ("boot props", self._docker_cmd("exec", name, "sh", "-lc", "getprop sys.boot_completed; getprop init.svc.zygote; getprop init.svc.zygote64; getprop init.svc.system_server; getprop init.svc.servicemanager"), 8),
+            ("android services", self._docker_cmd("exec", name, "sh", "-lc", "service check activity; service check activity_task; service check package; service check webviewupdate"), 8),
+            ("android ps", self._docker_cmd("exec", name, "sh", "-lc", "ps -A | grep -E 'zygote|system_server|vold|servicemanager|surfaceflinger|adbd' || true"), 8),
+            ("docker logs", self._docker_cmd("logs", "--tail", "160", name), 12),
+        ]
+        sections: list[str] = []
+        for label, cmd, timeout in checks:
+            out = await self._run_cmd(cmd, timeout=timeout, allow_failure=True)
+            text = out.strip()
+            if text:
+                sections.append(f"[{label}]\n{text}")
+        return "\n\n".join(sections)[-12000:]
+
+    async def _ensure_android_dns(self, serial: str) -> None:
+        """Ensure Android userspace has usable DNS for non-proxied Chrome.
+
+        Redroid accepts androidboot.redroid_net_dns* boot args, but on some
+        WSL/custom-kernel boots net.dns1/net.dns2 stay empty. IP traffic still
+        works in that state, while Chrome fails with ERR_NAME_NOT_RESOLVED.
+        Proxy sessions can still override/block DNS later through the root
+        DNS-leak prevention path.
+        """
+        use_wsl_dns_proxy = self._is_windows and self._should_use_host_network()
+        dns_values = (("net.dns1", "127.0.0.1"), ("net.dns2", "1.1.1.1")) if use_wsl_dns_proxy else (("net.dns1", "1.1.1.1"), ("net.dns2", "8.8.8.8"))
+        for key, value in dns_values:
+            await self._run_cmd(self._adb_cmd("shell", "setprop", key, value, serial=serial), timeout=8, allow_failure=True)
+        await self._run_cmd(
+            self._adb_cmd("shell", "sh", "-lc", android_dns_repair_command(use_wsl_dns_proxy=use_wsl_dns_proxy), serial=serial),
+            timeout=8,
+            allow_failure=True,
+        )
+        logger.info("Ensured Android DNS on %s is %s / %s", serial, dns_values[0][1], dns_values[1][1])
+
+    async def _android_dns_boot_ready(self, serial: str) -> bool:
+        """Return True when Redroid booted with DNS wired into connectivity."""
+        for _ in range(6):
+            ndns = await self._run_cmd(
+                self._adb_cmd("shell", "getprop", "ro.boot.redroid_net_ndns", serial=serial),
+                timeout=8,
+                allow_failure=True,
+            )
+            if ndns.strip() != "2":
+                return False
+            net_dns = await self._run_cmd(
+                self._adb_cmd("shell", "getprop", "net.dns1", serial=serial),
+                timeout=8,
+                allow_failure=True,
+            )
+            connectivity = await self._run_cmd(
+                self._adb_cmd("shell", "dumpsys", "connectivity", serial=serial),
+                timeout=12,
+                allow_failure=True,
+            )
+            if net_dns.strip() and "DnsAddresses: [ /" in connectivity:
+                return True
+            await asyncio.sleep(2)
+        return False
+
+    async def _android_dns_usable(self, serial: str) -> bool:
+        """Return True when Android userspace has DNS wired into connectivity.
+
+        Older containers may not expose ro.boot.redroid_net_ndns=2 because they
+        were created before Damru added that boot arg. They should not be
+        destroyed if runtime DNS is otherwise usable. Do not require ICMP ping:
+        Redroid/WSL can block ping while Chrome HTTPS navigation works.
+        """
+        await self._ensure_android_dns(serial)
+        net_dns = await self._run_cmd(
+            self._adb_cmd("shell", "getprop", "net.dns1", serial=serial),
+            timeout=8,
+            allow_failure=True,
+        )
+        if not net_dns.strip():
+            return False
+        connectivity = await self._run_cmd(
+            self._adb_cmd("shell", "dumpsys", "connectivity", serial=serial),
+            timeout=12,
+            allow_failure=True,
+        )
+        return "DnsAddresses: [ /" in connectivity or "Capabilities:" in connectivity
 
     async def _remap_adbd_port(self, name: str, port: int) -> None:
         """Move Redroid adbd to a stable per-worker host-network port."""
@@ -1203,6 +1518,9 @@ class RedroidManager:
             timeout=10, allow_failure=True,
         )
         if not out or "Unable to find package" in out:
+            return None
+        if "com.google.android.apps.chrome.Main" not in out:
+            logger.warning("Chrome package is present on %s but main activity is missing", serial)
             return None
         for line in out.splitlines():
             line = line.strip()

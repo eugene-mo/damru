@@ -51,10 +51,10 @@ async def _extract_creepjs(page: Page) -> Dict[str, Any]:
         const stealthMatch = all.match(/(\\d+)%\\s*stealth:/i);
         const liesMatch = all.match(/lies[:\\s]*(\\d+)/i);
         return {
-            likeHeadless: likeHeadlessMatch  likeHeadlessMatch[1] + "%" : "N/A",
-            headless: headlessMatch  headlessMatch[1] + "%" : "N/A",
-            stealth: stealthMatch  stealthMatch[1] + "%" : "N/A",
-            lies: liesMatch  liesMatch[1] : "N/A",
+            likeHeadless: likeHeadlessMatch ? likeHeadlessMatch[1] + "%" : "N/A",
+            headless: headlessMatch ? headlessMatch[1] + "%" : "N/A",
+            stealth: stealthMatch ? stealthMatch[1] + "%" : "N/A",
+            lies: liesMatch ? liesMatch[1] : "N/A",
         };
     }""")
 
@@ -72,7 +72,7 @@ async def _extract_browserscan(page: Page) -> Dict[str, Any]:
         const all = document.body.innerText;
         const scoreMatch = all.match(/(\\d+)\\s*%/);
         return {
-            score: scoreMatch  scoreMatch[1] + "%" : "N/A",
+            score: scoreMatch ? scoreMatch[1] + "%" : "N/A",
         };
     }""")
 
@@ -187,20 +187,46 @@ async def run_benchmark(
 
     results: List[TestResult] = []
 
-    async with AsyncDamru(
+    damru = AsyncDamru(
         device=device,
         serial=serial,
         proxy=proxy,
         timezone=timezone,
         locale=locale,
         debug=debug,
-    ) as context:
-        # Get or create a page
-        pages = context.pages
-        if pages:
-            page = pages[0]
-        else:
-            page = await context.new_page()
+    )
+    async with damru as context:
+        # Use a fresh tab for proof targets. The startup tab can retain stale
+        # network state after Redroid root/GPU/SurfaceFlinger setup.
+        page = await context.new_page()
+        for stale in list(context.pages):
+            if stale is page:
+                continue
+            try:
+                await stale.close()
+            except Exception:
+                pass
+
+        await damru._repair_wsl_network_if_needed()
+
+        # Android Chrome can report ERR_INTERNET_DISCONNECTED on the first
+        # post-setup navigation while connectivity services settle after root,
+        # route, and SurfaceFlinger changes. Warm up with a tiny stable page so
+        # proof targets measure the browser, not the first network tick.
+        for attempt in range(3):
+            try:
+                await damru._repair_wsl_network_if_needed()
+                await page.goto(
+                    "https://example.com/",
+                    wait_until="domcontentloaded",
+                    timeout=15000,
+                )
+                await page.goto("about:blank", wait_until="load", timeout=5000)
+                break
+            except Exception as exc:
+                if attempt == 2:
+                    logger.debug("Benchmark warm-up navigation skipped: %s", exc)
+                await sleep(2)
 
         for test_cfg in selected:
             name = test_cfg["name"]
@@ -214,6 +240,7 @@ async def run_benchmark(
                 # Navigation with retry
                 for attempt in range(3):
                     try:
+                        await damru._repair_wsl_network_if_needed()
                         await page.goto(
                             test_cfg["url"],
                             wait_until="domcontentloaded",
@@ -221,6 +248,22 @@ async def run_benchmark(
                         )
                         break
                     except Exception as nav_err:
+                        try:
+                            await page.evaluate("url => { window.location.href = url; }", test_cfg["url"])
+                            await page.wait_for_load_state("domcontentloaded", timeout=30000)
+                            break
+                        except Exception:
+                            pass
+                        try:
+                            if damru._chrome:
+                                await damru._chrome.launch(test_cfg["url"], startup_delay=5.0)
+                                await sleep(3)
+                                if context.pages:
+                                    page = context.pages[-1]
+                                if test_cfg["url"].split("/", 3)[2] in page.url:
+                                    break
+                        except Exception:
+                            pass
                         if attempt < 2:
                             logger.warning("Navigation retry %d: %s", attempt + 1, nav_err)
                             try:
@@ -314,7 +357,7 @@ def _format_summary(results: List[TestResult]) -> str:
 
 # ── CLI ──────────────────────────────────────────────────────────
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> int:
     """CLI entry point for damru benchmark."""
     parser = argparse.ArgumentParser(
         prog="damru-benchmark",
@@ -414,6 +457,8 @@ def main(argv: list[str] | None = None) -> None:
         output_path.write_text(json.dumps(report, indent=2))
         print(f"\nResults saved to: {args.output}")
 
+    return 0 if results and all(r.status == "OK" for r in results) else 1
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -3,6 +3,8 @@
 Edit values here. They are used across pool, docker, and auto-install.
 """
 
+import os
+
 # Pool Defaults
 # "auto" = spin up redroid Docker containers (WSL2 on Windows, native Linux)
 # "mumu" = auto-manage MuMu instances via MuMuManager.exe
@@ -62,7 +64,7 @@ REDROID_IMAGE = "damru-redroid:latest"
 # Upstream base image, pulled automatically when the baked image is absent
 # (see RedroidManager.ensure_image).
 REDROID_BASE_IMAGE = "redroid/redroid:14.0.0_64only-latest"
-REDROID_BASE_PORT = 5600
+REDROID_BASE_PORT = int(os.environ.get("DAMRU_REDROID_BASE_PORT", "5600"))
 REDROID_CONTAINER_PREFIX = "damru-worker-"
 # Resources per container (2 cores + 2 GB for heavy SPAs at high resolution)
 REDROID_CPUS = 2.0
