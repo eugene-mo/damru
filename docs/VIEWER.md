@@ -10,9 +10,11 @@ The easiest viewer path is the experimental local dashboard:
 python -m damru ui
 ```
 
-Open **Work Lab**, select an ADB worker, then click **Open viewer**. The browser viewer streams Android screenshots and sends click, drag, text, Back, Home, and Recent actions over ADB. It is useful for quick inspection, but native `scrcpy` is usually smoother for long manual sessions.
+Open **Work Lab**, select an ADB worker, then click **Open viewer**. The browser viewer streams Android screenshots and sends click, drag, text, Back, Home, and Recent actions over ADB. It is useful for quick inspection, but it is browser-based and can feel slower than native screen mirroring.
 
 Use **Copy native command** in Work Lab to copy the right terminal command for the current OS and selected worker. On Windows, Damru still manages workers through WSL, but the native viewer command passes the plain TCP serial such as `127.0.0.1:5600` to `scrcpy`.
+
+The UI also exposes URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, and inline logs for the selected worker. These actions are convenience wrappers around allowlisted Damru commands; they do not run arbitrary shell input.
 
 ## Commands
 
@@ -45,7 +47,7 @@ python -m damru install-viewer
 python -m damru check-env --viewer
 ```
 
-On native Linux, `install-viewer` installs `scrcpy` with apt. On Windows, native Windows `scrcpy` is recommended because it gives the smoothest GUI. Redroid and Docker still run inside WSL2; the viewer is only a host-side display/control tool over ADB.
+On native Linux, `install-viewer` installs `scrcpy` with apt. On Windows, native Windows `scrcpy` is recommended because it gives the smoothest GUI. Redroid and Docker still run inside WSL2; the viewer is only a host-side display/control tool over ADB. If a copied command from the UI contains `wsl:127.0.0.1:5600`, remove the `wsl:` prefix for native `scrcpy`; current UI builds copy the plain TCP serial on Windows automatically.
 
 ## Screenshots and Video
 

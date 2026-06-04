@@ -20,7 +20,9 @@ python -m pytest --run-damru-probes -q
 Useful focused checks:
 
 ```bash
+python -m pytest tests/test_preflight_cli.py -q
 python -m pytest tests/test_images_unit.py tests/test_root_webrtc.py -q
+python -m damru check preflight --json --no-adb
 python -m damru check-env --viewer
 python -m damru fix-wsl
 ```

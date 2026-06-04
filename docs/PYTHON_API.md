@@ -173,12 +173,13 @@ For first-run setup, prefer the CLI:
 python -m damru setup
 python -m damru install-image
 python -m damru check-env
+python -m damru check preflight
 python -m damru fix-wsl
 ```
 
 `setup` runs dependency setup by default. If no baked image is loaded and no local Chrome/WebView/TTS APK assets exist, Damru downloads and extracts the APK bundle automatically. `install-image` auto-detects and loads `damru-redroid-latest.tar`; use `python -m damru install-image --download` if the tarball is not local. The baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences, so users do not need separate APK assets unless they intentionally run an unbaked raw Redroid image. For raw image baking or APK error recovery, run `python -m damru install-apks --download`; it downloads the [Chrome/WebView/TTS APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing), extracts to `/home/damru/chrome-apks` on Linux/WSL, copies Damru's shipped `magisk.apk` there when needed, then sets `CHROME_APK` only when needed. Manual Linux/WSL extraction is also valid: `sudo mkdir -p /home/damru && sudo chown "$USER:$USER" /home/damru && unzip chrome-apks.zip -d /home/damru/chrome-apks`. Keep the top-level WebView/TTS APKs beside the Chrome version folders; Damru discovers `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, `rhvoice.apk`, and the copied `magisk.apk` from the same bundle root. If automatic detection fails, set `CHROME_APK` to a Chrome split-APK version directory such as `/home/damru/chrome-apks/145.0.7632.75`. On Windows, extract with File Explorer/7-Zip and use the WSL path such as `/mnt/c/Users/you/Downloads/damru/chrome-apks/145.0.7632.75`.
 
-`check-env` verifies Linux/WSL tools, Docker, binderfs, baked image/Chrome asset discovery, and the Damru Playwright `crPage.js` patch. `fix-wsl` retries safe Docker, binderfs, routing, and netfilter repairs. On Windows, Docker/Redroid is always managed inside WSL2; native Windows Docker is not used. Redroid auto mode routes ADB through WSL and can use host networking with per-worker ADB port remapping (`wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, ...) when Docker-published ADB ports are unreliable. Host-network containers are started with Android DNS boot parameters, and Damru repairs WSL policy routing/default routes after setup so no-proxy HTTPS navigation works in fresh WSL sessions. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL uses legacy iptables where available because several WSL kernels reject Docker's `addrtype` NAT rule through nft.
+`check-env` verifies Linux/WSL tools, Docker, binderfs, baked image/Chrome asset discovery, and the Damru Playwright `crPage.js` patch. `check preflight` is the fast read-only variant for CI/fleet rollout: it reports Docker, ADB, binder/binderfs, Redroid image, APK bundle, disk/RAM/CPU, ports, config, WSL kernel status, and physical ADB warnings without installing, repairing, mounting, starting containers, or changing routes/iptables. On WSL, preflight reads kernel config to distinguish unsupported kernels from supported-but-unmounted binderfs; default mode warns for the latter, while `--strict` fails it. `fix-wsl` retries safe Docker, binderfs, routing, and netfilter repairs. `fix-internet` repairs WSL/Docker/Android DNS state for one worker or all online workers. On Windows, Docker/Redroid is always managed inside WSL2; native Windows Docker is not used. Redroid auto mode routes ADB through WSL and uses stable per-worker ADB ports (`wsl:127.0.0.1:5600`, `wsl:127.0.0.1:5601`, ...). Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL uses legacy iptables where available because several WSL kernels reject Docker's `addrtype` NAT rule through nft.
 
 Damru normalizes new Android Chrome tabs before returning them from `context.new_page()`. User code can immediately navigate a new page in single sessions or concurrent pools without first fighting Chrome's Android startup/home-tab navigation.
 
@@ -206,6 +207,14 @@ python -m damru view --serial wsl:127.0.0.1:5600 --no-control
 ```
 
 These commands use ADB/scrcpy and are intentionally not started by `AsyncDamru`, `Damru`, or pool sessions.
+
+For a local browser dashboard, run:
+
+```bash
+python -m damru ui
+```
+
+The UI is experimental and localhost-only by default. It wraps the same allowlisted CLI/backend actions: setup health, workers, Work Lab URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, browser viewer streaming, native `scrcpy` command copy, and logs. It is meant for setup/debugging/manual inspection, not as the primary automation API.
 
 ---
 

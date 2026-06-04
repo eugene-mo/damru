@@ -1,12 +1,12 @@
 # Damru Verification Proof
 
-Date: 2026-06-02
+Date: 2026-06-04
 
 This file records sanitized local verification results. It intentionally does not include private proxy credentials, local usernames, local IP addresses, SSH details, or machine-specific secrets.
 
 ## WSL2 Redroid
 
-Validated on a fresh-loop WSL2 distro using the bundled Damru WSL kernel path.
+Validated on a disposable fresh-loop WSL2 distro using the bundled Damru WSL kernel path. The long-lived WSL distro that stores kernel source/build trees was not touched.
 
 Commands verified:
 
@@ -15,6 +15,11 @@ python -m damru install-deps -y
 python -m damru fix-wsl
 python -m damru install-viewer -y
 python -m damru check-env --viewer
+python -m damru check preflight --json --timeout 3
+python -m damru ui-worker start --count 2
+python -m damru quick-check --serial 127.0.0.1:5900 --output /tmp/damru-wsl-quick-5900.json
+python -m damru quick-check --serial 127.0.0.1:5901 --output /tmp/damru-wsl-quick-5901.json
+python -m damru open-url --serial 127.0.0.1:5900 --url https://example.com
 ```
 
 Result:
@@ -26,17 +31,18 @@ Result:
 - Chrome APK discovery: OK
 - Redroid image available: OK
 - scrcpy viewer command: OK
-- Cross-distro host-network fallback conflict: none detected
+- Cross-distro WSL Redroid conflict: none detected
+- Preflight after worker start: `ok=true`, `fail=0`
+- Fresh two-worker quick checks: OK on both workers
 
 Browser smoke:
 
-- `AsyncDamru` single-worker session loaded `https://example.com`.
-- `DamruPool(mode="auto", max_devices=2)` loaded `https://example.com` in two concurrent Redroid workers.
-- Both WSL workers reported `navigator.hardwareConcurrency == 8`.
+- Two Redroid workers booted, reported Chrome installed, DNS present, locale present, timezone present, and Android boot complete.
+- `open-url` loaded `https://example.com` in Android Chrome on the first worker.
 
 ## Native Ubuntu/Linux
 
-Validated on an Ubuntu VPS after removing Docker packages/state and recreating the Python virtual environment.
+Validated on an Ubuntu 24.04 VPS after removing Docker packages/state in earlier loops and recreating temporary Python virtual environments for current-tree smoke checks.
 
 Reset/install flow verified:
 
@@ -47,6 +53,11 @@ python3 -m venv /tmp/damru-linux-proof/venv
 /tmp/damru-linux-proof/venv/bin/python -m damru install-deps -y
 /tmp/damru-linux-proof/venv/bin/python -m damru check-env --viewer
 /tmp/damru-linux-proof/venv/bin/python -m pytest -q
+python -m damru check preflight --json --timeout 3
+python -m damru ui-worker start --count 2
+python -m damru quick-check --serial 127.0.0.1:5600 --output /tmp/damru-vps-quick-5600.json
+python -m damru quick-check --serial 127.0.0.1:5601 --output /tmp/damru-vps-quick-5601.json
+python -m damru open-url --serial 127.0.0.1:5600 --url https://example.com
 ```
 
 Result:
@@ -56,14 +67,16 @@ Result:
 - Docker bridge/NAT networking: OK
 - binderfs mounted at `/dev/binderfs`: OK
 - Damru Playwright `crPage.js` patch: OK
-- Unit test suite: `8 passed, 13 skipped`
+- Unit test suite: `29 passed, 13 skipped`
 - `scrcpy`: optional warning only when not installed
+- Preflight: `ok=true`, `fail=0`
 
 Browser smoke:
 
 - Single-worker `AsyncDamru` session loaded `https://example.com` and reported Android UA plus `navigator.hardwareConcurrency == 8`.
 - Two-worker `DamruPool(mode="auto", max_devices=2)` loaded `https://example.com` in both workers.
 - Both native Linux workers reported `navigator.hardwareConcurrency == 8`.
+- Latest two-worker `quick-check` reported ADB online, boot completed, Chrome installed, DNS present, fingerprint present, locale present, model present, and timezone present for both workers.
 
 Proof assets from the native Ubuntu VPS run with a US proxy are stored in [`docs/assets/proof/`](assets/proof/):
 
@@ -98,6 +111,12 @@ Recorded proof values:
 The individual site proof pass used a fixed Pixel 8 Pro Android 14 profile for repeatability. Targets loaded successfully through a runtime-only proxy bridge. The metadata records Android Chrome UA, `navigator.hardwareConcurrency == 8`, `navigator.deviceMemory == 8`, and `navigator.maxTouchPoints == 5`. Timezone and locale are resolved from the active proxy exit at session start; the latest Fingerprint Pro proof used a Philippine exit with `Asia/Manila` and `en-PH`, returned `Bot: Not detected`, `VPN: Not detected`, and showed confidence score `1`. CreepJS reported `0% headless`, `0% stealth`, and WebRTC host/STUN connections blocked.
 
 ## Fixed During Verification
+
+- Added `python -m damru check preflight`, a fast read-only readiness check with JSON, strict, no-ADB, timeout, resource, port, WSL kernel, image, APK, Docker, ADB, binderfs, and config checks.
+- Fixed WSL `wsl:` ADB serial handling when the CLI is already running inside Linux/WSL.
+- Changed WSL preflight to detect actual binderfs kernel support from `/proc/config.gz` or `/boot/config-*` instead of relying on kernel filename guesses.
+- Treated supported-but-unmounted WSL binderfs as a warning in default preflight because `fix-wsl` or worker startup can mount it; strict mode still fails the warning.
+- Added a fresh Redroid fallback locale (`en-US`) only when Android has no locale yet, preventing false `locale_present=false` quick-check failures on raw fresh workers.
 
 - Native Linux no longer forces `iptables-legacy`; it selects `iptables-nft` so Docker's NAT chain exists in the backend Docker uses.
 - Docker is restarted after backend selection during setup/repair.

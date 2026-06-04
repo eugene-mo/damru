@@ -116,10 +116,10 @@ def test_proxy_geo_does_not_use_stale_cache_by_default(monkeypatch):
 def test_dataimpulse_proxy_gets_sticky_session(monkeypatch):
     monkeypatch.setattr("damru.proxy.secrets.token_hex", lambda n: "abc12345")
 
-    proxy = "socks5://user:pass@gw.dataimpulse.com:824"
+    proxy = "socks5://user:pass@proxy.dataimpulse.com:824"
     sticky = make_sticky_proxy_url(proxy)
 
-    assert sticky == "socks5://user;sessid.damruabc12345;sessttl.30:pass@gw.dataimpulse.com:824"
+    assert sticky == "socks5://user;sessid.damruabc12345;sessttl.30:pass@proxy.dataimpulse.com:824"
 
 
 def test_non_dataimpulse_proxy_is_not_changed():

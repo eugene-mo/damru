@@ -2,7 +2,7 @@
 
 Addresses Gap #1 (Image Management) from `docs/AUTOMATION_GAPS_PLAN.md`.
 
-Branch: `wip/image-auto-pull` (off `main`).
+Status: historical implementation note. Current users should prefer `python -m damru install-image` for the baked image and `python -m damru check preflight` / `python -m damru check-env` for readiness.
 
 ## Problem
 
@@ -36,6 +36,13 @@ Implemented pieces:
 2. **CLI verification path** -
    - `python -m damru check-env` reports Docker, binderfs, Chrome APKs, Redroid
      image state, and the Damru Playwright `crPage.js` patch.
+   - `python -m damru check preflight` performs the fast read-only version for
+     CI/fleet scripts without pulling images, starting containers, mounting
+     binderfs, or editing networking.
+   - `python -m damru install-image` loads or downloads the baked
+     `damru-redroid:latest` tarball when available.
+   - `python -m damru install-apks --download` downloads/extracts the raw
+     Chrome/WebView/TTS bundle only when raw/unbaked Redroid needs local APKs.
    - `python -m damru install-deps` installs Linux/WSL dependencies and fails
      clearly when the WSL kernel lacks required Docker netfilter modules.
    - `python -m damru fix-wsl` retries safe WSL Docker, binderfs, and

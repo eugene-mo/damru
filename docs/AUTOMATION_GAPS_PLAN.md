@@ -1,7 +1,8 @@
 # Damru Automation Gaps - Complete Analysis & Fix Plan
 
 **Date**: 2026-02-18
-**Status**: Partially implemented. The CLI setup/check/install path now exists; this document is retained as the broader automation roadmap.
+**Last reviewed**: 2026-06-04
+**Status**: Historical roadmap. Many original gaps are now implemented in the CLI, preflight command, image/APK installer, WSL kernel installer, and experimental UI. Treat sections marked "missing" as historical context unless they also appear in the current README or changelog.
 **Priority**: High - Make damru fully automated from A to Z
 
 ---
@@ -65,23 +66,33 @@ Docker Root Dir: /var/lib/docker   Inside WSL!
 - `damru` console entry point exists.
 - `python -m damru setup` writes config and can run dependency setup.
 - `python -m damru check-env` verifies Linux/WSL tools, Docker, binderfs, Chrome APKs, Redroid image state, and the Damru Playwright `crPage.js` patch.
+- `python -m damru check preflight` provides fast read-only readiness checks with JSON/strict/no-ADB modes for fleet scripts.
 - `python -m damru install-deps` installs common Linux/WSL dependencies.
+- `python -m damru install-image` loads or downloads the baked Redroid image.
+- `python -m damru install-apks --download` downloads/extracts the raw Chrome/WebView/TTS APK bundle only when raw/unbaked Redroid needs it.
 - `python -m damru fix-wsl` retries safe Docker, binderfs, and netfilter fixes and reports missing WSL kernel modules clearly.
+- `python -m damru fix-internet` repairs WSL/Docker/Android DNS and internet state for one worker or all running workers.
 - Optional visual commands exist for manual inspection: `screenshot`, `record`, `view`, and `install-viewer`.
+- `python -m damru ui` starts the experimental localhost dashboard for setup health, workers, Work Lab, browser viewer, gallery, and logs.
 - On Windows, Docker/Redroid setup runs inside WSL with `wsl -u root`; native Windows Docker is not used.
 
 **Current commands:**
 ```bash
 python -m damru setup
 python -m damru check-env
+python -m damru check preflight
 python -m damru install-deps
+python -m damru install-image
+python -m damru install-apks --download
 python -m damru fix-wsl
+python -m damru fix-internet
 python -m damru bake-image
 python -m damru devices
 python -m damru screenshot
 python -m damru record
 python -m damru view
 python -m damru install-viewer
+python -m damru ui
 ```
 
 ---

@@ -89,6 +89,8 @@ The installer is backup-first. It verifies the bundled checksums, copies the ker
 For Windows users, Damru recommends a fresh/dedicated WSL distro for Redroid. Installing the bundled kernel changes `%USERPROFILE%\.wslconfig`, so it affects how WSL boots. Damru backs up `.wslconfig` before editing it, but a custom kernel can still break Docker, networking, modules, or other WSL workloads. Native Linux/Ubuntu does not use this WSL kernel installer.
 
 The UI requires typing `yes` before installing the bundled WSL kernel. Noninteractive CLI installs require both `--yes` and `--confirm-wsl-kernel-risk`; `--yes` alone is intentionally refused.
+
+`python -m damru check preflight` is read-only. On WSL it checks the active kernel config for `CONFIG_ANDROID_BINDER_IPC` and `CONFIG_ANDROID_BINDERFS`, but it does not mount binderfs. If the kernel supports binderfs and `/dev/binderfs` is simply not mounted after a WSL restart, default preflight reports a warning; `python -m damru fix-wsl` or worker startup mounts binderfs before Redroid launch. Use `--strict` if your deployment pipeline wants that warning to fail.
 Status only:
 
 ```powershell
@@ -165,16 +167,20 @@ Windows auto mode uses Docker bridge networking with published ADB ports. Use on
 
 ## Verified Commands
 
-The current bundled kernel/setup path was validated on June 2, 2026 with:
+The current bundled kernel/setup path was validated again on June 4, 2026 with a disposable fresh WSL distro and a separate base ADB port:
 
 ```powershell
-$env:DAMRU_WSL_DISTRO = "DamruLoopTest10"
+$env:DAMRU_REDROID_BASE_PORT = "5900"
 python -m damru install-deps -y
 python -m damru fix-wsl
-python -m damru install-viewer -y
-python -m damru check-env --viewer
+python -m damru install-image --tar /mnt/c/path/to/damru-redroid-latest.tar
+python -m damru check preflight --json --timeout 3
+python -m damru ui-worker start --count 2
+python -m damru quick-check --serial 127.0.0.1:5900 --output /tmp/damru-wsl-quick-5900.json
+python -m damru quick-check --serial 127.0.0.1:5901 --output /tmp/damru-wsl-quick-5901.json
+python -m damru open-url --serial 127.0.0.1:5900 --url https://example.com
 ```
 
-The same WSL distro then passed a single-worker `AsyncDamru` smoke and a two-worker `DamruPool(mode="auto", max_devices=2)` smoke. Both workers loaded `https://example.com` and reported `navigator.hardwareConcurrency == 8`.
+The disposable WSL distro then passed a two-worker Redroid smoke. Both workers reported Android boot complete, Chrome installed, DNS present, locale present, timezone present, and Android Chrome opened `https://example.com` on the first worker.
 
-Native Ubuntu/Linux does not use the WSL kernel installer. The native Linux path was reset by removing Docker packages/state, creating a fresh Python venv, running `python -m damru install-deps -y`, then validating `check-env --viewer`, unit tests, single-worker smoke, and two-worker pool smoke. Native Linux selected `iptables-nft` and Docker bridge/NAT passed.
+Native Ubuntu/Linux does not use the WSL kernel installer. The native Ubuntu 24.04 path was reset by removing Docker packages/state in earlier loops, then validated again with a fresh Python venv, `python -m damru install-deps -y`, `python -m damru check preflight --json`, two Redroid workers, `quick-check` on both workers, and `open-url https://example.com`. Native Linux selected `iptables-nft` and Docker bridge/NAT passed.

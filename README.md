@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
@@ -12,7 +12,7 @@
 
   <p>
     <strong>Community:</strong>
-    <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended
+    <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended | <a href="https://www.reddit.com/r/Damru">r/Damru</a>
   </p>
   <p><strong>Official repository:</strong> <a href=https://github.com/akwin1234/damru>github.com/akwin1234/damru</a></p>
 </div>
@@ -23,7 +23,7 @@
 
 > [!WARNING]
 > **Project Status: Beta**
-> This project is currently in a **Beta** state. While it has been verified as 100% stable and fully functional on the local systems of the developers who built it, it requires further testing across diverse environments and hardware configurations. We welcome feedback and issue reports!
+> This project is currently in a **Beta** state. The current Ubuntu 24.04 and Ubuntu WSL2 paths have passed fresh/reset smoke loops, but Damru still depends on host kernel, Docker, ADB, and Redroid behavior. Run `python -m damru check preflight` before starting workers, and report environment-specific failures.
 
 ---
 
@@ -78,7 +78,9 @@ Damru's most advanced stealth layers - including native GPU binary patching and 
 *    **Browser Version & Client Hints Randomization**: Dynamically selects from a database of verified Chrome versions and generates perfectly accurate `sec-ch-ua` Client Hints, including Chromium GREASE brand permutations.
 *    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
 
-*   **Auto Image Management**: Automatically pulls and tags the required Redroid Docker images if the custom baked image is missing.
+*   **Fast Preflight Checks**: `python -m damru check preflight` performs read-only Docker, ADB, binderfs, image, APK, resource, WSL kernel, port, and config checks with JSON output for fleet scripts.
+*   **Experimental Local Dashboard**: `python -m damru ui` provides setup status, worker controls, Work Lab actions, browser viewer, gallery cleanup, logs, quick checks, and native viewer command copy from localhost.
+*   **Auto Image & APK Management**: Loads/downloads the baked Redroid image, finds local APK bundles, and auto-downloads the raw Chrome/WebView/TTS asset bundle only when an unbaked/raw image path needs it.
 *   **Font & Voice Randomization**: Installs custom TTS engines and extra system fonts, randomizing them per session.
 *   **Hardware Status Spoofing**: Fakes battery levels, charging status, and even audio sample rates (48kHz) to mirror real mobile hardware behavior.
 *   **Hardware Overrides**: Spoofs CPU cores, RAM (via syscall hooks), and touch points (e.g., 5-point touch) directly via native OS patching and CDP.
@@ -320,7 +322,7 @@ Damru ships `magisk.apk` as a package asset and uses it only when raw/unbaked Re
 
 ## First-Time User Deployment Guide (WSL2 / Linux)
 
-Ready to start Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices instantly. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
+Damru uses **Redroid** (Android in Docker) to spin up headless mobile devices. Follow this step-by-step guide to deploy Damru from scratch on the tested Ubuntu paths: native Ubuntu VPS/Linux, or Ubuntu inside WSL2 with Damru's bundled WSL kernel.
 
 > [!IMPORTANT]
 > Redroid is Linux-only. On Windows, Docker and Redroid must run inside WSL2; native Windows Docker is not a supported Redroid target.
@@ -370,11 +372,12 @@ On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB
 
 Damru's WSL kernel installer also writes `dnsTunneling=true` and `networkingMode=NAT` into `%USERPROFILE%\.wslconfig`. This avoids a common WSL failure where the distro can ping public IPs but `apt`, `pip`, or Docker containers cannot resolve DNS names. Run `wsl --shutdown` after kernel/DNS changes, then reopen Ubuntu.
 
-Current validation on June 2, 2026. Full sanitized notes are in [Verification Proof](docs/PROOF.md):
+Current validation on June 4, 2026. Full sanitized notes are in [Verification Proof](docs/PROOF.md):
 
-- WSL2 fresh-loop distro: `install-deps -y`, `fix-wsl`, `install-viewer -y`, `check-env --viewer`, single-worker browser smoke, and two-worker `DamruPool(mode="auto", max_devices=2)` passed.
-- Native Ubuntu VPS reset loop: Docker packages/state removed, fresh venv created, `install-deps -y`, `check-env --viewer`, unit tests, single-worker browser smoke, and two-worker pool smoke passed.
-- Both Ubuntu WSL2 and native Ubuntu verified `https://example.com` in two concurrent Redroid workers with `navigator.hardwareConcurrency == 8`.
+- Disposable Ubuntu WSL2 fresh-loop distro: `install-deps -y`, `install-image`, preflight, single-worker smoke, two-worker smoke, `quick-check`, and `open-url https://example.com` passed. The protected kernel-source WSL distro was not touched.
+- Native Ubuntu 24.04 VPS reset/current-tree loop: fresh venv, `install-deps -y`, preflight, two workers, `quick-check`, and `open-url https://example.com` passed.
+- Local unit suite: `29 passed, 13 skipped`.
+- Both Ubuntu WSL2 and native Ubuntu verified concurrent Redroid workers with Chrome installed, DNS present, locale/timezone present, and Android boot complete.
 - Debian 13 Trixie VPS was tested with kernel `6.12.86+deb13-amd64`; Docker worked, but Redroid multi-container support failed because the kernel reported `# CONFIG_ANDROID_BINDERFS is not set`.
 
 ### Step 2: Install Docker & Enable Binderfs (Crucial for Redroid)
@@ -534,6 +537,7 @@ When you import Damru, it verifies and applies the bundled Playwright `crPage.js
 ```bash
 python -m damru setup           # guided first-run setup and config writer
 python -m damru check-env       # validate Linux/WSL dependencies and assets
+python -m damru check preflight # fast read-only readiness checks for fleets
 python -m damru install-deps    # install common Linux/WSL dependencies
 python -m damru fix-wsl         # retry safe WSL Docker/binderfs/netfilter fixes
 python -m damru fix-internet    # repair WSL/Docker/Android DNS and internet checks
@@ -549,6 +553,21 @@ python -m damru view            # open optional scrcpy live viewer
 python -m damru install-viewer  # check/install optional scrcpy tooling
 python -m damru ui              # open the experimental local web dashboard
 ```
+
+### Fleet Preflight
+
+Use preflight when you want a fast, read-only readiness check before starting Redroid workers, especially across many VPS/VM hosts:
+
+```bash
+python -m damru check preflight
+python -m damru check preflight --json
+python -m damru check preflight --strict
+python -m damru check preflight --no-adb
+```
+
+`check preflight` does not install packages, mount binderfs, load/pull images, start containers, run `docker run`, edit iptables/routes, or change `.wslconfig`. It checks host/WSL support, Python/Playwright, Linux tools, Docker daemon and bridge, binder/binderfs, configured Redroid image, APK bundle, disk/RAM/CPU, ADB devices, ADB port range, config sanity, and WSL kernel status. Use `--json` for deployment tooling; use `--strict` when warnings such as physical ADB devices, busy ports, low resources, or non-bundled WSL kernel should fail CI.
+
+In WSL, preflight is intentionally read-only. If the active kernel supports binderfs but `/dev/binderfs` is not mounted yet, preflight reports a warning instead of a false hard failure; `python -m damru fix-wsl` or worker startup mounts it before Redroid launch. Use `--strict` if your deployment pipeline wants that warning to fail.
 
 For testing a separate WSL distro without changing `config.py`, set `DAMRU_WSL_DISTRO`, for example: `$env:DAMRU_WSL_DISTRO="DamruFreshKernelTest"`. If another local Damru runtime already owns ADB ports `5600+`, set `DAMRU_REDROID_BASE_PORT`, for example: `$env:DAMRU_REDROID_BASE_PORT="5700"`. Use one dedicated WSL distro for normal Damru Redroid work.
 
@@ -571,7 +590,7 @@ Damru includes an experimental localhost dashboard for setup, worker management,
 python -m damru ui
 ```
 
-Open the printed `http://127.0.0.1:<port>` URL. The UI is local-only by default and uses an allowlisted backend; it does not expose arbitrary shell execution. The dashboard shows WSL controls only on Windows and native Ubuntu controls on Linux. For smoother manual control, use **Copy native command** in Work Lab and paste it in a terminal to launch `scrcpy` for the selected worker.
+Open the printed `http://127.0.0.1:<port>` URL. The UI is local-only by default and uses an allowlisted backend; it does not expose arbitrary shell execution. The dashboard shows WSL controls only on Windows and native Ubuntu controls on Linux. Good setup checks collapse by default so failures stay visible. Work Lab can open URLs, run quick stealth checks, capture screenshots, clear the gallery, repair internet, apply random profiles, and stream a browser viewer for the selected worker. For smoother manual control, use **Copy native command** in Work Lab and paste it in a terminal to launch `scrcpy` for the selected worker.
 
 ### Use Redroid Like an Emulator Window
 
@@ -798,7 +817,15 @@ with DamruPoolSync(mode="auto", max_devices=3, proxies=proxies) as pool:
 
 ## Testing Your Setup
 
-Damru ships with a comprehensive benchmark suite. Run it to ensure your setup is truly undetectable.
+Start with the fast readiness and Android sanity checks before running full benchmarks:
+
+```bash
+python -m damru check preflight
+python -m damru check-env
+python -m damru quick-check --serial 127.0.0.1:5600
+```
+
+Damru also ships with a benchmark suite for proof/stealth checks:
 
 ```bash
 # Run all benchmark tests on a random device
@@ -815,10 +842,12 @@ python -m damru benchmark --device samsung_galaxy_s24_ultra --proxy socks5://ip:
 We are aggressively building Damru into a fully autonomous infrastructure tool. Check `docs/AUTOMATION_GAPS_PLAN.md` for details.
 
 *   [x] **`damru setup` CLI**: Single-command configuration plus Linux/WSL dependency setup.
-*   [x] **Automated Health Checks**: Verification of ADB, Docker, binderfs, Chrome APKs, and Playwright patches.
+*   [x] **Automated Health Checks**: Verification of ADB, Docker, binderfs, Chrome APKs, images, Playwright patches, resources, ports, and WSL kernel state.
+*   [x] **Fleet Preflight**: Fast read-only `check preflight` command with JSON and strict modes for many VPS/VM hosts.
 *   [x] **Manual Viewer Tools**: Optional screenshots, video recording, and scrcpy live viewer.
-*   [ ] **Auto Image Management**: Damru will dynamically bake "Damru-Ready" Docker images natively.
-*   [ ] **Mass Orchestration**: Expanding `DamruPool` for Kubernetes/Swarm deployment.
+*   [x] **Experimental Local UI**: Localhost setup dashboard, worker controls, Work Lab actions, viewer, logs, and gallery cleanup.
+*   [x] **Auto Image/APK Management**: `install-image`, `install-apks`, raw APK bundle discovery, and image baking commands.
+*   [ ] **Packaging polish**: More release automation, smaller proof packs, clearer issue templates, and better first-run UI guidance.
 
 ---
 

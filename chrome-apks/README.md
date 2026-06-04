@@ -1,20 +1,42 @@
-# 📦 Chrome APKs (`chrome-apks/`)
+# Chrome APK Bundle (`chrome-apks/`)
 
-To achieve true undetectability, we cannot rely on whatever default browser version happens to be pre-installed on the emulator. We must match our browser version *exactly* with the User-Agent we are spoofing.
+Damru normally uses the baked `damru-redroid:latest` image, which already contains Chrome, WebView/TTS APKs, fonts, warm browser preferences, and native assets. Most users do not need to manage APKs manually.
 
-> **This folder contains the actual `.apk` payloads injected into the Android emulator when running raw/unbaked Redroid.**
+This folder is for raw/unbaked Redroid, image baking, or APK recovery.
 
-The APK payloads are large and are not committed to Git. Install the release bundle when you need raw APKs for baking or unbaked Redroid:
+## Automatic Install
 
 ```bash
 python -m damru install-apks --download
 ```
 
-Google Drive bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
+The installer downloads the release APK bundle, extracts it to `/home/damru/chrome-apks` on Linux/WSL by default, validates Chrome/WebView/TTS APKs, and copies Damru's packaged `magisk.apk` into the bundle when raw Redroid needs a local `resetprop` source. Damru does not download Magisk, eSpeak, Google TTS, or RHVoice from third-party APK sites at runtime.
 
-Extract/copy it so one bundle root, normally `/home/damru/chrome-apks` on Linux/WSL, contains version directories such as `145.0.7632.75/` with `base.apk`, `google_trichrome_library.apk`, and Chrome split APKs. Keep the top-level WebView/TTS APKs in this same bundle folder too, for example `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, and `rhvoice.apk`. Damru ships `magisk.apk` itself and copies it into this bundle automatically when raw Redroid needs standalone `resetprop`.
+Manual fallback bundle: [Chrome/WebView/TTS APK assets](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing)
 
-Manual Linux/WSL example:
+## Expected Layout
+
+Keep one bundle root with Chrome split APK version folders and top-level support APKs:
+
+```text
+chrome-apks/
+  143.0.7499.52/*.apk
+  144.0.7559.132/*.apk
+  145.0.7632.75/*.apk
+  TrichromeWebView.apk
+  google_tts.apk
+  espeak.apk
+  rhvoice.apk
+  magisk.apk
+```
+
+Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. If auto-detection fails, set `CHROME_APK` to a Chrome split-APK version directory such as:
+
+```python
+CHROME_APK = "/home/damru/chrome-apks/144.0.7559.132"
+```
+
+## Manual Extraction
 
 ```bash
 sudo mkdir -p /home/damru
@@ -23,25 +45,10 @@ unzip damru-chrome-apks-latest.zip -d /home/damru/chrome-apks
 find /home/damru/chrome-apks -maxdepth 2 -name '*.apk' | head
 ```
 
-If the archive already contains a top-level `chrome-apks/` directory, extract it beside the project instead. On Windows, use File Explorer or 7-Zip, then copy the resulting `chrome-apks` folder into the Damru project. WSL sees Windows files under `/mnt/c/...`.
+On Windows, extract with File Explorer or 7-Zip. If Damru runs inside WSL, use the WSL path (`/mnt/c/...`) or copy the bundle to `/home/damru/chrome-apks`.
 
----
+## Deployment Notes
 
-## 🗂️ Contents
-
-### 🌐 Chrome Splits (`143.x`, `144.x`, `145.x`)
-We maintain different versions of Chrome. When Damru generates a spoofed profile, it automatically detects which Chrome version is needed and installs the corresponding APKs via ADB.
-
-*   `base.apk`: The core browser application.
-*   `google_trichrome_library.apk`: The shared Chromium rendering engine required by modern Android Chrome.
-*   `split_config.*.apk`: Architecture and language specific splits.
-
-### 🗣️ TTS Engines (`espeak.apk`, `google_tts.apk`, `rhvoice.apk`)
-Many anti-bots fingerprint the Text-to-Speech (TTS) voices available on the device. Emulators often have *zero* voices, which is a massive red flag. Damru installs these APKs to populate the Android TTS service with realistic voice arrays, mimicking a real human's smartphone.
-
----
-
-## 🚀 Deployment Note
-
-*   **Dynamic Push**: If you use the manual base OS image, Damru will dynamically push and install these APKs on cold starts.
-*   **Pre-baked**: If you use the [damru-redroid-latest.tar](https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing) pre-baked image, all of these APKs (and the TTS configuration) are permanently integrated into the OS image, allowing instant booting without the 30+ second ADB installation penalty.
+- **Baked image:** preferred. APKs are already installed in `damru-redroid:latest`.
+- **Raw/unbaked image:** Damru installs Chrome/WebView/TTS APKs on cold start, which is slower and has more moving parts.
+- **Image baking:** run `install-apks --download`, then `python -m damru bake-image --image damru-redroid:latest` inside Linux/WSL.

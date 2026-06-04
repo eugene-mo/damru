@@ -12,10 +12,12 @@ import platform
 import re
 import shutil
 import shlex
+import socket
 import subprocess
 import sys
 import time
 import zipfile
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from pathlib import PureWindowsPath
 from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_bundle
@@ -162,12 +164,17 @@ def _adb_cmd(serial: str | None, *args: str) -> list[str]:
     if not serial and args and args[0] in {"connect", "disconnect"} and len(args) > 1:
         target = args[1]
         if target.startswith("wsl:"):
-            return ["wsl", "-d", _configured_wsl_distro(), "--", "adb", args[0], target[4:]]
+            if _is_windows():
+                return ["wsl", "-d", _configured_wsl_distro(), "--", "adb", args[0], target[4:]]
+            args = (args[0], target[4:], *args[2:])
 
     if serial and serial.startswith("wsl:"):
         plain = serial[4:]
         routed_args = _translate_wsl_adb_file_args(args)
-        return ["wsl", "-d", _configured_wsl_distro(), "--", "adb", "-s", plain, *routed_args]
+        if _is_windows():
+            return ["wsl", "-d", _configured_wsl_distro(), "--", "adb", "-s", plain, *routed_args]
+        serial = plain
+        args = tuple(routed_args)
 
     base = ["adb"]
     if serial:
@@ -234,7 +241,7 @@ def _adb_devices_text() -> str:
     result = _run_adb_text(None, "devices", "-l", timeout=20)
     if result.returncode == 0:
         outputs.append(result.stdout)
-    linux = _linux_run("adb devices -l", timeout=20)
+    linux = _linux_run("adb devices -l", timeout=20) if _is_windows() else subprocess.CompletedProcess([], 1, "", "")
     if linux.returncode == 0:
         lines = []
         for line in linux.stdout.splitlines():
@@ -472,7 +479,9 @@ def _repair_runtime_internet(serial: str | None = None, quiet: bool = False) -> 
             "shell",
             "sh",
             "-lc",
-            android_dns_repair_command(use_wsl_dns_proxy=False),
+            android_dns_repair_command(use_wsl_dns_proxy=False)
+            + "; locale=$(getprop persist.sys.locale); "
+            + "[ -n \"$locale\" ] || { setprop persist.sys.locale en-US; setprop persist.sys.language en; setprop persist.sys.country US; }; true",
             timeout=8,
         )
         if _is_windows():
@@ -655,6 +664,349 @@ def _playwright_patch_status() -> tuple[bool, str]:
     except Exception as exc:
         return False, str(exc)
 
+
+@dataclass
+class PreflightCheck:
+    id: str
+    label: str
+    status: str
+    detail: str = ""
+    fix: str = ""
+
+
+def _preflight_status(ok: bool, strict: bool = False, warn: bool = False) -> str:
+    if ok:
+        return "pass"
+    if warn and not strict:
+        return "warn"
+    return "fail"
+
+
+def _preflight_add(checks: list[PreflightCheck], check_id: str, label: str, status: str, detail: str = "", fix: str = "") -> None:
+    checks.append(PreflightCheck(check_id, label, status, detail, fix))
+
+
+def _preflight_config() -> dict[str, object]:
+    try:
+        from . import config
+    except Exception:
+        return {}
+    return {
+        "mode": getattr(config, "MODE", "auto"),
+        "num_devices": int(getattr(config, "NUM_DEVICES", 1) or 1),
+        "image": getattr(config, "REDROID_IMAGE", "damru-redroid:latest"),
+        "base_port": int(getattr(config, "REDROID_BASE_PORT", 5600) or 5600),
+        "chrome_apk": getattr(config, "CHROME_APK", None),
+    }
+
+
+def _preflight_linux_readonly(script: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    return _linux_run(script, timeout=timeout, root_user=_is_windows())
+
+
+def _preflight_command_exists(command: str, timeout: int) -> tuple[bool, str]:
+    result = _preflight_linux_readonly("command -v " + shlex.quote(command), timeout)
+    return result.returncode == 0, (result.stdout or result.stderr).strip()
+
+
+def _preflight_docker_image_exists(image: str, timeout: int) -> tuple[bool, str]:
+    result = _preflight_linux_readonly("docker image inspect " + shlex.quote(image) + " >/dev/null 2>&1", timeout)
+    return result.returncode == 0, image
+
+
+def _preflight_playwright_patch_status() -> tuple[bool, str]:
+    try:
+        if importlib.util.find_spec("playwright") is None:
+            return False, "playwright package not installed"
+        from . import playwright_patch
+        if not playwright_patch._BUNDLED_CRPAGE.is_file():
+            return False, "bundled patch missing: " + str(playwright_patch._BUNDLED_CRPAGE)
+        target = playwright_patch._find_installed_crpage()
+        if target is None:
+            return False, "installed Playwright crPage.js path not found"
+        if not playwright_patch._is_patched(target):
+            return False, "not patched: " + str(target)
+        return True, str(target)
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _preflight_apk_status() -> tuple[bool, str]:
+    bundle_root = find_apk_bundle_root()
+    if bundle_root is not None:
+        return validate_apk_bundle(bundle_root)
+    chrome_apk = _preflight_config().get("chrome_apk")
+    if chrome_apk:
+        p = Path(str(chrome_apk)).expanduser()
+        return p.exists(), str(p)
+    return False, "no APK bundle found; baked image users can ignore this unless raw Redroid is used"
+
+
+def _preflight_linux_mem_total_gb(timeout: int) -> float | None:
+    result = _preflight_linux_readonly("awk '/MemTotal/ {printf \"%.2f\", $2/1024/1024}' /proc/meminfo", timeout)
+    try:
+        return float((result.stdout or "").strip()) if result.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def _preflight_linux_disk_free_gb(timeout: int) -> float | None:
+    result = _preflight_linux_readonly("df -Pk / | awk 'NR==2 {printf \"%.2f\", $4/1024/1024}'", timeout)
+    try:
+        return float((result.stdout or "").strip()) if result.returncode == 0 else None
+    except ValueError:
+        return None
+
+
+def _preflight_parse_adb_devices(text: str) -> list[tuple[str, str, str]]:
+    devices: list[tuple[str, str, str]] = []
+    for line in text.splitlines()[1:]:
+        if not line.strip():
+            continue
+        parts = line.split(maxsplit=2)
+        if len(parts) >= 2:
+            devices.append((parts[0], parts[1], parts[2] if len(parts) > 2 else ""))
+    return devices
+
+
+def _preflight_is_redroid_serial(serial: str, detail: str = "") -> bool:
+    clean = serial[4:] if serial.startswith("wsl:") else serial
+    return clean.startswith("127.0.0.1:") or "redroid" in detail.lower()
+
+
+def _preflight_adb_devices(timeout: int) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]], str]:
+    try:
+        text = _adb_devices_text()
+    except subprocess.TimeoutExpired:
+        return [], [], "adb devices timed out"
+    except Exception as exc:
+        return [], [], str(exc)
+    devices = _preflight_parse_adb_devices(text)
+    online = [item for item in devices if item[1] == "device"]
+    physical = [item for item in online if not _preflight_is_redroid_serial(item[0], item[2])]
+    return online, physical, text.strip()
+
+
+def _preflight_port_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
+def _preflight_ports(base_port: int, count: int, timeout: int) -> tuple[bool, str]:
+    ports = [base_port + i for i in range(max(1, count))]
+    local_busy = [port for port in ports if _preflight_port_open(port)]
+    docker = _preflight_linux_readonly("docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -E 'damru|redroid' || true", timeout)
+    detail = []
+    if local_busy:
+        detail.append("host ports already listening: " + ", ".join(str(p) for p in local_busy))
+    if docker.stdout.strip():
+        detail.append("running Docker workers detected")
+    return not local_busy, "; ".join(detail) if detail else f"ports {ports[0]}-{ports[-1]} look free"
+
+
+def _preflight_wsl_kernel_status(timeout: int) -> tuple[str, str, str]:
+    if _is_wsl_linux():
+        kernel = platform.uname().release
+        try:
+            from .docker import _kernel_config_enabled
+
+            config_text = _kernel_config_text()
+            binder_ipc = _kernel_config_enabled(config_text, "CONFIG_ANDROID_BINDER_IPC")
+            binderfs = _kernel_config_enabled(config_text, "CONFIG_ANDROID_BINDERFS")
+        except Exception:
+            binder_ipc = None
+            binderfs = None
+        if binder_ipc is True and binderfs is True:
+            return "pass", f"WSL2 Linux kernel with binderfs support: {kernel}", ""
+        if binder_ipc is False or binderfs is False:
+            return (
+                "fail",
+                f"WSL2 Linux kernel lacks Android binderfs support: {kernel}",
+                "From Windows run 'python -m damru wsl-kernel install', then 'wsl --shutdown'.",
+            )
+        return (
+            "warn",
+            f"WSL2 Linux kernel detected; kernel config not readable: {kernel}",
+            "Run 'python -m damru check-env' or a two-worker smoke test to confirm binderfs support.",
+        )
+    if not _is_windows():
+        return "skip", "native Linux; WSL kernel not used", ""
+    if shutil.which("wsl") is None:
+        return "fail", "wsl.exe not found", "Install WSL2 Ubuntu before running Damru on Windows."
+    distro = _configured_wsl_distro()
+    result = _run(["wsl", "-d", distro, "-u", "root", "--", "uname", "-r"], timeout=timeout)
+    kernel = (result.stdout or result.stderr).strip()
+    if result.returncode != 0:
+        return "fail", "cannot run WSL distro '" + distro + "': " + kernel, "Set DAMRU_WSL_DISTRO or run 'python -m damru setup'."
+    if "WSL2" not in kernel:
+        return "fail", kernel or "unknown kernel", "Convert the distro to WSL2."
+    config_result = _run(
+        [
+            "wsl",
+            "-d",
+            distro,
+            "-u",
+            "root",
+            "--",
+            "sh",
+            "-lc",
+            "if [ -r /proc/config.gz ]; then zcat /proc/config.gz; elif [ -r /boot/config-$(uname -r) ]; then cat /boot/config-$(uname -r); fi",
+        ],
+        timeout=timeout,
+    )
+    try:
+        from .docker import _kernel_config_enabled
+
+        binder_ipc = _kernel_config_enabled(config_result.stdout or "", "CONFIG_ANDROID_BINDER_IPC")
+        binderfs = _kernel_config_enabled(config_result.stdout or "", "CONFIG_ANDROID_BINDERFS")
+    except Exception:
+        binder_ipc = None
+        binderfs = None
+    if binder_ipc is True and binderfs is True:
+        return "pass", distro + ": WSL2 kernel with binderfs support: " + kernel, ""
+    if binder_ipc is False or binderfs is False:
+        return "fail", distro + ": WSL2 kernel lacks Android binderfs support: " + kernel, "Run 'python -m damru wsl-kernel install', then 'wsl --shutdown'."
+    bundled_ok, bundled_detail = _verify_bundled_wsl_kernel()
+    if bundled_ok and _BUNDLED_WSL_KERNEL_NAME in kernel:
+        return "pass", distro + ": " + kernel, ""
+    if bundled_ok:
+        return "warn", distro + ": " + kernel + "; bundled kernel available at " + bundled_detail, "Run 'python -m damru wsl-kernel install' for Redroid WSL support."
+    return "warn", distro + ": " + kernel + "; bundled kernel unavailable: " + bundled_detail, "Reinstall Damru package assets."
+
+
+def _preflight_summary(checks: list[PreflightCheck]) -> dict[str, int]:
+    return {status: sum(1 for check in checks if check.status == status) for status in ("pass", "warn", "fail", "skip")}
+
+
+def _render_preflight_human(checks: list[PreflightCheck]) -> None:
+    print("Damru Preflight")
+    print("Read-only checks only. No Docker install, image pull/load, container start, mount, modprobe, or iptables changes.\n")
+    width = max((len(check.label) for check in checks), default=1)
+    for check in checks:
+        mark = check.status.upper().ljust(4)
+        detail = "  " + check.detail if check.detail else ""
+        print(f"{mark} {check.label.ljust(width)}{detail}")
+        if check.fix and check.status in {"warn", "fail"}:
+            print("     Fix: " + check.fix)
+    summary = _preflight_summary(checks)
+    print(f"\nSummary: FAIL {summary['fail']}, WARN {summary['warn']}, PASS {summary['pass']}, SKIP {summary['skip']}")
+
+
+def _check_preflight(args: argparse.Namespace) -> int:
+    timeout = max(1, int(getattr(args, "timeout", 3) or 3))
+    strict = bool(getattr(args, "strict", False))
+    checks: list[PreflightCheck] = []
+    cfg = _preflight_config()
+    count = int(cfg.get("num_devices", 1) or 1)
+    image = str(cfg.get("image", "damru-redroid:latest"))
+    base_port = int(cfg.get("base_port", 5600) or 5600)
+
+    host_ok = _is_windows() or platform.system() == "Linux"
+    host_detail = "Windows/WSL" if _is_windows() else f"{platform.system()} {platform.release()}"
+    _preflight_add(checks, "host_os", "Host OS", _preflight_status(host_ok), host_detail, "Use Windows 10/11 with WSL2 Ubuntu or native Ubuntu 24.")
+    wsl_status, wsl_detail, wsl_fix = _preflight_wsl_kernel_status(timeout)
+    _preflight_add(checks, "wsl_kernel", "WSL kernel", wsl_status, wsl_detail, wsl_fix)
+    py_ok = sys.version_info >= (3, 10)
+    _preflight_add(checks, "python", "Python >= 3.10", _preflight_status(py_ok), platform.python_version(), "Install Python 3.10+.")
+    try:
+        import importlib.metadata as importlib_metadata
+        damru_detail = importlib_metadata.version("damru")
+    except Exception:
+        damru_detail = "source checkout"
+    _preflight_add(checks, "damru_package", "Damru package", "pass", damru_detail)
+    pw_ok = importlib.util.find_spec("playwright") is not None
+    _preflight_add(checks, "playwright", "Python package: playwright", _preflight_status(pw_ok), "installed" if pw_ok else "missing", "Run 'python -m damru install-deps -y' or 'pip install playwright>=1.40,<1.60'.")
+    patch_ok, patch_detail = _preflight_playwright_patch_status()
+    _preflight_add(checks, "playwright_patch", "Damru Playwright patch", _preflight_status(patch_ok), patch_detail, "Run 'python -m damru install-deps -y' to apply the patch.")
+
+    for command in ("bash", "docker", "adb"):
+        ok, detail = _preflight_command_exists(command, timeout)
+        _preflight_add(checks, "cmd_" + command, "Linux command: " + command, _preflight_status(ok), detail or ("found" if ok else "missing"), "Run 'python -m damru install-deps -y'.")
+    for command in ("curl", "wget", "jq"):
+        ok, detail = _preflight_command_exists(command, timeout)
+        _preflight_add(checks, "cmd_" + command, "Linux command: " + command, _preflight_status(ok, strict=strict, warn=True), detail or ("found" if ok else "missing"), "Run 'python -m damru install-deps -y'.")
+
+    docker_ok = _preflight_linux_readonly("docker info >/dev/null 2>&1", timeout).returncode == 0
+    _preflight_add(checks, "docker_daemon", "Docker daemon", _preflight_status(docker_ok), "running" if docker_ok else "not reachable", "Start Docker or run 'python -m damru install-deps -y'.")
+    if docker_ok:
+        bridge_ok = _preflight_linux_readonly("docker network inspect bridge >/dev/null 2>&1", timeout).returncode == 0
+        _preflight_add(checks, "docker_bridge", "Docker bridge network", _preflight_status(bridge_ok), "available" if bridge_ok else "missing", "Run 'python -m damru fix-wsl' on WSL or repair Docker networking.")
+        image_ok, image_detail = _preflight_docker_image_exists(image, timeout)
+        _preflight_add(checks, "redroid_image", "Redroid image", _preflight_status(image_ok), image_detail if image_ok else image + " not found", "Run 'python -m damru install-image --download'.")
+    else:
+        _preflight_add(checks, "docker_bridge", "Docker bridge network", "skip", "Docker daemon unavailable")
+        _preflight_add(checks, "redroid_image", "Redroid image", "skip", "Docker daemon unavailable")
+
+    binder = _preflight_linux_readonly("test -e /dev/binder && test -e /dev/hwbinder && test -e /dev/vndbinder", timeout).returncode == 0
+    binderfs = _preflight_linux_readonly("test -d /dev/binderfs && mount | grep -q ' /dev/binderfs ' && test -e /dev/binderfs/binder-control", timeout).returncode == 0
+    wsl_auto_mountable_binderfs = _is_wsl_linux() and wsl_status == "pass" and not binderfs
+    if binder:
+        binder_detail = "/dev/binder /dev/hwbinder /dev/vndbinder"
+    elif binderfs:
+        binder_detail = "binderfs device namespace available"
+    elif wsl_auto_mountable_binderfs:
+        binder_detail = "binderfs not mounted yet; WSL kernel supports it"
+    else:
+        binder_detail = "missing one or more binder devices"
+    binder_status = _preflight_status(binder or binderfs, strict=strict, warn=wsl_auto_mountable_binderfs)
+    binder_fix = "Run 'python -m damru fix-wsl' to mount binderfs before checking again." if wsl_auto_mountable_binderfs else "Use Ubuntu with binder-enabled kernel; on WSL install Damru's bundled kernel."
+    _preflight_add(checks, "binder_devices", "Android binder devices", binder_status, binder_detail, binder_fix)
+    multi_ok, multi_detail = _redroid_multi_container_status(binderfs)
+    if wsl_auto_mountable_binderfs and not multi_ok:
+        multi_detail = "/dev/binderfs not mounted yet; Damru can mount it during fix-wsl or worker start"
+    multi_status = _preflight_status(multi_ok, strict=strict, warn=wsl_auto_mountable_binderfs)
+    multi_fix = "Run 'python -m damru fix-wsl' or start a worker; Damru mounts binderfs before Redroid launch." if wsl_auto_mountable_binderfs else "Run 'python -m damru fix-wsl' on WSL or use a binderfs-enabled Ubuntu kernel."
+    _preflight_add(checks, "binderfs", "binderfs multi-worker support", multi_status, multi_detail, multi_fix)
+
+    apk_ok, apk_detail = _preflight_apk_status()
+    image_pass = any(c.id == "redroid_image" and c.status == "pass" for c in checks)
+    apk_status = "pass" if apk_ok else ("warn" if image_pass and not strict else "fail")
+    _preflight_add(checks, "apk_bundle", "APK bundle", apk_status, apk_detail, "Run 'python -m damru install-apks --download' for raw/unbaked Redroid.")
+
+    disk_gb = _preflight_linux_disk_free_gb(timeout)
+    disk_need = max(12, 8 + count * 8)
+    disk_ok = disk_gb is not None and disk_gb >= disk_need
+    _preflight_add(checks, "disk_space", "Disk free", _preflight_status(disk_ok, strict=strict, warn=disk_gb is not None), f"{disk_gb:.1f} GB free; recommended >= {disk_need} GB" if disk_gb is not None else "unknown", "Free disk space before loading Redroid images/workers.")
+    mem_gb = _preflight_linux_mem_total_gb(timeout)
+    mem_need = max(4, count * 2)
+    mem_ok = mem_gb is not None and mem_gb >= mem_need
+    _preflight_add(checks, "memory", "RAM", _preflight_status(mem_ok, strict=strict, warn=mem_gb is not None), f"{mem_gb:.1f} GB total; recommended >= {mem_need} GB" if mem_gb is not None else "unknown", "Use fewer workers or a larger VM/WSL memory limit.")
+    cpu = os.cpu_count() or 0
+    cpu_need = max(2, count * 2)
+    _preflight_add(checks, "cpu", "CPU cores", _preflight_status(cpu >= cpu_need, strict=strict, warn=True), f"{cpu}; recommended >= {cpu_need}", "Use fewer workers or a larger VM.")
+    ports_ok, ports_detail = _preflight_ports(base_port, count, timeout)
+    _preflight_add(checks, "ports", "ADB port range", _preflight_status(ports_ok, strict=strict, warn=True), ports_detail, "Stop stale Damru workers or set DAMRU_REDROID_BASE_PORT.")
+
+    if getattr(args, "no_adb", False):
+        _preflight_add(checks, "adb_devices", "ADB devices", "skip", "--no-adb")
+    else:
+        online, physical, detail = _preflight_adb_devices(timeout)
+        status = "pass" if not physical else ("fail" if strict else "warn")
+        label_detail = f"online={len(online)}, physical/non-Redroid={len(physical)}"
+        if not online and detail:
+            label_detail = detail
+        _preflight_add(checks, "adb_devices", "ADB devices", status, label_detail, "Disconnect physical devices or target explicit Redroid serials.")
+
+    mode = str(cfg.get("mode", "auto"))
+    cfg_ok = mode in {"auto", "manual", "mumu"} and count >= 1 and base_port > 0
+    _preflight_add(checks, "config", "Damru config", _preflight_status(cfg_ok), f"mode={mode}, num_devices={count}, image={image}, base_port={base_port}", "Run 'python -m damru setup'.")
+
+    if strict:
+        for check in checks:
+            if check.status == "warn":
+                check.status = "fail"
+    summary = _preflight_summary(checks)
+    payload = {"ok": summary["fail"] == 0, "summary": summary, "checks": [asdict(check) for check in checks]}
+    if getattr(args, "json", False):
+        print(json.dumps(payload, indent=2))
+    else:
+        _render_preflight_human(checks)
+    if summary["fail"] == 0:
+        return 0
+    if any(check.id in {"host_os", "wsl_kernel", "config"} and check.status == "fail" for check in checks):
+        return 2
+    return 1
 
 def _config_path() -> Path:
     from . import config
@@ -2276,6 +2628,14 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--viewer", action="store_true", help="also check optional scrcpy viewer support")
     check.set_defaults(func=_check_env)
 
+    check_group = sub.add_parser("check", help="read-only Damru checks")
+    check_sub = check_group.add_subparsers(dest="check_command", required=True)
+    preflight = check_sub.add_parser("preflight", help="fast read-only Docker/ADB/binderfs/image readiness checks")
+    preflight.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    preflight.add_argument("--strict", action="store_true", help="treat warnings as failures")
+    preflight.add_argument("--no-adb", action="store_true", help="skip ADB device listing")
+    preflight.add_argument("--timeout", type=int, default=3, help="per-check timeout seconds; default 3")
+    preflight.set_defaults(func=_check_preflight)
     install = sub.add_parser("install-deps", help="install common Linux/WSL dependencies")
     install.add_argument("-y", "--yes", action="store_true", help="run without an interactive confirmation")
     install.add_argument(

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Updated README/docs for the current Ubuntu 24.04 and Ubuntu WSL2 beta path, minimum capacity planning, preflight, local UI, viewer workflows, image/APK handling, WSL kernel behavior, proof results, and legal/fork policy.
+- Verified the current tree on a disposable Ubuntu WSL2 distro and a native Ubuntu 24.04 VPS: preflight, two Redroid workers, `quick-check`, and `open-url https://example.com` passed on both.
+- Fixed WSL `wsl:` ADB serial handling when Damru is already running inside Linux/WSL, so commands such as `quick-check --serial wsl:127.0.0.1:5600` do not try to launch `wsl.exe` from inside WSL.
+- Fixed fresh Redroid quick checks by setting a fallback Android locale only when `persist.sys.locale` is empty.
+- Made preflight detect WSL kernel binderfs support from the active kernel config on both Windows-launched and WSL-launched paths.
+- Made supported-but-unmounted WSL binderfs a default preflight warning instead of a false hard failure; `--strict` still fails it for CI/fleet policies.
+- Removed exact private-provider gateway wording from proxy test fixtures while keeping sticky-session behavior covered.
+- Added `python -m damru check preflight`, a fast read-only readiness check for Docker, ADB, binder/binderfs, Redroid image, APK bundle, ports, resources, WSL kernel status, JSON fleet output, and strict warning handling.
 - Added `python -m damru ui`, an experimental localhost dashboard for setup checks, worker lifecycle actions, Work Lab browser actions, browser-based live viewing, native viewer command copy, gallery cleanup, and inline job logs.
 - Added `python -m damru quick-check`, a fast local Android/Chrome sanity checker for ADB, boot, Chrome, DNS, timezone, locale, Android props, and core fingerprint fields.
 - Added `python -m damru fix-internet` and UI worker actions for repairing WSL/Docker/Android DNS and internet state across one worker or all running Damru workers.
