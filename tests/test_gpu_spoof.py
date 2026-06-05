@@ -25,25 +25,36 @@ def _check_gpu_spoof() -> bool:
             page.goto("about:blank")
 
             print("[2/5] Querying WebGL GPU renderer...")
-            gpu_info = page.evaluate(
-                """
-                () => {
-                    const canvas = document.createElement('canvas');
-                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                    if (!gl) return { error: 'WebGL not supported' };
+            probe_js = """
+            () => {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (!gl) return { error: 'WebGL not supported' };
 
-                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                    if (!debugInfo) return { error: 'WEBGL_debug_renderer_info not available' };
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (!debugInfo) return { error: 'WEBGL_debug_renderer_info not available' };
 
-                    return {
-                        renderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL),
-                        vendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL),
-                        version: gl.getParameter(gl.VERSION),
-                        shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-                    };
-                }
-                """
-            )
+                return {
+                    renderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL),
+                    vendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL),
+                    version: gl.getParameter(gl.VERSION),
+                    shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+                };
+            }
+            """
+            last_exc = None
+            for attempt in range(3):
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=5000)
+                    gpu_info = page.evaluate(probe_js)
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    print(f"   WebGL probe retry {attempt + 1}/3: {exc}")
+                    page = ctx.new_page()
+                    page.goto("about:blank")
+            else:
+                raise last_exc  # type: ignore[misc]
 
             print("\n[3/5] GPU Information Retrieved:")
             print("-" * 70)

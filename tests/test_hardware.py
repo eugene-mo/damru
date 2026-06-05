@@ -22,8 +22,8 @@ TEST_TIMEZONE = os.environ.get("DAMRU_TEST_TIMEZONE", "Asia/Manila")
 TEST_DEVICES = [
     # (name, expected_cores, expected_mem)
     ("Samsung Galaxy S24 FE", 10, 8),     # Exynos 10-core
-    ("Samsung Galaxy A15 5G", 8, 4),      # Budget: 4GB RAM
-    ("Xiaomi Redmi Note 12 5G", 8, 4),    # Budget: 4GB RAM
+    ("Samsung Galaxy A15 5G", 8, 8),      # 8GB variant
+    ("Xiaomi Redmi Note 12 5G", 8, 8),    # 8GB variant
     ("Google Pixel 8 Pro", 8, 8),         # Standard flagship
 ]
 
@@ -45,6 +45,20 @@ async def _check_device(name: str, expected_cores: int, expected_mem: int) -> bo
         ) as context:
             page = context.pages[0] if context.pages else await context.new_page()
 
+            async def read_hardware_values(label: str):
+                last_exc = None
+                for attempt in range(3):
+                    try:
+                        return await page.evaluate("""() => ({
+                            cores: navigator.hardwareConcurrency,
+                            mem: navigator.deviceMemory,
+                        })""")
+                    except Exception as exc:
+                        last_exc = exc
+                        print(f"  {label} probe retry {attempt + 1}/3: {exc}")
+                        await asyncio.sleep(0.75)
+                raise last_exc
+
             # Test 1: Check values on data: URL
             await page.goto(
                 "data:text/html,<h1>test</h1>",
@@ -53,10 +67,7 @@ async def _check_device(name: str, expected_cores: int, expected_mem: int) -> bo
             )
             await asyncio.sleep(1)
 
-            vals = await page.evaluate("""() => ({
-                cores: navigator.hardwareConcurrency,
-                mem: navigator.deviceMemory,
-            })""")
+            vals = await read_hardware_values("data URL")
 
             cores = vals.get("cores")
             mem = vals.get("mem")
@@ -76,19 +87,16 @@ async def _check_device(name: str, expected_cores: int, expected_mem: int) -> bo
                 )
                 await asyncio.sleep(2)
 
-                vals2 = await page.evaluate("""() => ({
-                    cores: navigator.hardwareConcurrency,
-                    mem: navigator.deviceMemory,
-                })""")
+                vals2 = await read_hardware_values("example.com")
 
                 cores2 = vals2.get("cores")
                 mem2 = vals2.get("mem")
                 print(f"  [example.com] cores={cores2}, mem={mem2}")
 
                 cores_persist = cores2 == expected_cores
-                mem_persist = True
+                mem_persist = mem2 == expected_mem if mem2 is not None else True
                 print(f"  cores persist: {'PASS' if cores_persist else 'FAIL'}")
-                print(f"  mem persist:   INFO (got {mem2}, target {expected_mem}; Chrome may cap/omit deviceMemory)")
+                print(f"  mem persist:   {'PASS' if mem_persist else 'FAIL'} (got {mem2}, expected {expected_mem})")
 
                 return cores_ok and mem_ok and cores_persist and mem_persist
 
