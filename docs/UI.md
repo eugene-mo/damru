@@ -60,6 +60,8 @@ The UI shows WSL-specific controls only on Windows. Native Ubuntu users see nati
 
 The workers page manages Damru Redroid containers and ADB workers. It does not intentionally touch unrelated Docker containers.
 
+Worker rows are paginated and searchable. When Docker workers exist but ADB is still reconnecting, Work Lab shows that state explicitly instead of claiming no worker exists.
+
 Top actions:
 
 - **Start all**: starts existing stopped Damru workers, or starts the configured worker count when none exist.
@@ -145,6 +147,8 @@ Buttons:
 ## Logs
 
 Logs tracks UI jobs started from buttons. Use it when a button shows an error, when setup is slow, or when you need sanitized output for debugging.
+
+Job history is paginated so long setup/debug sessions stay usable.
 
 Shows:
 

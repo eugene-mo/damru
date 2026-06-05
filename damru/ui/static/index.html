@@ -135,9 +135,10 @@
             </thead>
             <tbody id="workersTable"></tbody>
           </table>
+          <div class="pagination-bar" id="workersPager" aria-label="Worker pagination"></div>
           <div class="empty-state hidden" id="workersEmpty">
             <h3>No Damru workers found</h3>
-            <p>Start a Damru session from Python or run setup checks first. Worker start buttons will be added only when the backend can start pools safely.</p>
+            <p>Add workers after setup is ready, or start an existing stopped worker from this page.</p>
           </div>
         </div>
       </section>
@@ -274,6 +275,7 @@
               <button class="button danger subtle" id="clearLogsBtn" type="button">Clear logs</button>
             </div>
             <div class="job-list large" id="jobsList"></div>
+            <div class="pagination-bar" id="jobsPager" aria-label="Job pagination"></div>
           </article>
           <article class="panel log-panel">
             <div class="card-head">

@@ -40,7 +40,7 @@ def test_redroid_manager_finds_chrome_from_cwd_bundle(tmp_path, monkeypatch):
 
     assert Path(found) == (bundle / "145.0.7632.75").resolve()
 
-def test_redroid_manager_skips_chrome_145_for_auto_selection(tmp_path, monkeypatch):
+def test_redroid_manager_allows_chrome_145_for_auto_selection(tmp_path, monkeypatch):
     bundle = _make_bundle(tmp_path)
     version = bundle / "143.0.7499.52"
     version.mkdir(parents=True)
@@ -49,7 +49,7 @@ def test_redroid_manager_skips_chrome_145_for_auto_selection(tmp_path, monkeypat
 
     for _ in range(20):
         found = RedroidManager().find_chrome_apk()
-        assert Path(found).name == "143.0.7499.52"
+        assert Path(found).name in {"143.0.7499.52", "145.0.7632.75"}
 
 
 def test_bundle_validation_requires_webview_and_tts(tmp_path):

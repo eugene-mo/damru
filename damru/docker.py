@@ -48,11 +48,7 @@ from .config import (
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines
 from .utils import logger
 
-_CHROME_APK_AUTO_SKIP_VERSIONS = {
-    # Chrome 145 currently boots/navigates, but returns zero speechSynthesis
-    # voices with the bundled Android TTS engines on raw Redroid.
-    "145.0.7632.75",
-}
+_CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
 
 
 def _kernel_config_enabled(config_text: str, option: str) -> Optional[bool]:

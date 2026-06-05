@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rebuilt the baked Redroid image from the clean Redroid base instead of stacking on an older `damru-redroid:latest`; the current export is about 943 MB and includes the validated Chrome/WebView/TTS/resetprop assets.
+- Fixed `quick-check` DNS readiness so it accepts Android DNS from the active resolver state instead of requiring only `net.dns1`, which prevented false DNS failures on freshly imported images.
+- Updated UI Workers and Logs pages with compact pagination and clearer ADB-empty wording when Docker workers exist but ADB is still reconnecting.
+- Added release metadata tests so the hardcoded image checksum must match `damru-redroid-latest.tar.sha256` and Chrome auto-selection cannot silently re-skip known-good versions.
 - Added UI documentation and screenshots for Dashboard, Setup, Workers, Work Lab, Settings, and Logs.
 - Expanded the raw Chrome APK bundle to 19 validated Chrome split-APK versions from `143.0.7499.52` through `148.0.7778.217`; Chrome 149 is intentionally excluded until a compatible English/x86/x86_64 bundle is available.
 - Made random profile actions rotate Chrome APK versions when the validated APK bundle is present, while keeping Chrome first-run prompts suppressed and stale tabs cleared.

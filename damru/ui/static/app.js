@@ -63,6 +63,10 @@ const state = {
   selectedSerial: localStorage.getItem("damru:selectedSerial") || "",
   viewer: { running: false, timer: null, serial: "", size: null, lastUrl: "", objectUrl: "", frameWidth: 0, frameHeight: 0, tapHoldUntil: 0, frameLoading: false, pendingFrame: false, pointer: null, markerTimer: null, textBuffer: "", textTimer: null },
   viewerBusy: false,
+  workerPage: 1,
+  workerPageSize: 10,
+  jobsPage: 1,
+  jobsPageSize: 20,
   poll: null,
 };
 
@@ -364,15 +368,37 @@ function jobCard(job) {
   </div>`;
 }
 
+function clampPage(page, totalItems, pageSize) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  return Math.min(Math.max(1, page), totalPages);
+}
+
+function paginationHtml(kind, page, pageSize, totalItems) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const start = totalItems ? ((page - 1) * pageSize) + 1 : 0;
+  const end = Math.min(totalItems, page * pageSize);
+  return `<div class="pager-meta">${start}-${end} of ${totalItems}</div>
+    <div class="pager-actions">
+      <button class="button secondary" type="button" data-page-kind="${kind}" data-page-dir="prev" ${page <= 1 ? "disabled" : ""}>Previous</button>
+      <span class="mono">Page ${page}/${totalPages}</span>
+      <button class="button secondary" type="button" data-page-kind="${kind}" data-page-dir="next" ${page >= totalPages ? "disabled" : ""}>Next</button>
+    </div>`;
+}
+
 function renderWorkers() {
   const q = ($("workerSearch")?.value || "").toLowerCase();
   const workers = state.workers.filter((w) => JSON.stringify(w).toLowerCase().includes(q));
+  state.workerPage = clampPage(state.workerPage, workers.length, state.workerPageSize);
+  const start = (state.workerPage - 1) * state.workerPageSize;
+  const visibleWorkers = workers.slice(start, start + state.workerPageSize);
   if ($("addWorkerBtn")) {
     $("addWorkerBtn").disabled = false;
     $("addWorkerBtn").title = "Add the requested number of Damru workers";
   }
   $("workersEmpty").classList.toggle("hidden", workers.length !== 0);
-  $("workersTable").innerHTML = workers.map((w) => {
+  $("workersPager").classList.toggle("hidden", workers.length <= state.workerPageSize);
+  $("workersPager").innerHTML = paginationHtml("workers", state.workerPage, state.workerPageSize, workers.length);
+  $("workersTable").innerHTML = visibleWorkers.map((w) => {
     const running = w.state === "running";
     const bootClass = w.boot === "booted" ? "ok" : w.boot === "stopped" ? "bad" : "warn";
     const serial = workerSerial(w);
@@ -437,7 +463,11 @@ function switchViewerSerialFast(serial) {
 function renderSerialOptions() {
   const devices = state.adb || [];
   const previous = state.selectedSerial || $("taskSerial")?.value || $("viewerSerial")?.value || "";
-  const options = devices.length ? devices.map((d) => `<option value="${escapeHtml(d.serial)}">${escapeHtml(d.serial)} (${escapeHtml(d.state)})</option>`).join("") : `<option value="">No online ADB device</option>`;
+  const runningWorkers = (state.workers || []).filter((worker) => worker.state === "running").length;
+  const emptyLabel = runningWorkers
+    ? `${runningWorkers} worker${runningWorkers === 1 ? "" : "s"} found; ADB not online yet`
+    : "No online ADB device";
+  const options = devices.length ? devices.map((d) => `<option value="${escapeHtml(d.serial)}">${escapeHtml(d.serial)} (${escapeHtml(d.state)})</option>`).join("") : `<option value="">${escapeHtml(emptyLabel)}</option>`;
   $("taskSerial").innerHTML = options;
   $("viewerSerial").innerHTML = options;
   const nextSerial = devices.some((device) => device.serial === previous) ? previous : (devices[0]?.serial || "");
@@ -781,7 +811,12 @@ function viewerPaste(event) {
 }
 
 function renderJobs() {
-  $("jobsList").innerHTML = state.jobs.length ? state.jobs.map(jobCard).join("") : `<div class="empty-state"><h3>No jobs yet</h3><p>Run setup or proof actions to see logs.</p></div>`;
+  state.jobsPage = clampPage(state.jobsPage, state.jobs.length, state.jobsPageSize);
+  const start = (state.jobsPage - 1) * state.jobsPageSize;
+  const visibleJobs = state.jobs.slice(start, start + state.jobsPageSize);
+  $("jobsList").innerHTML = visibleJobs.length ? visibleJobs.map(jobCard).join("") : `<div class="empty-state"><h3>No jobs yet</h3><p>Run setup or proof actions to see logs.</p></div>`;
+  $("jobsPager").classList.toggle("hidden", state.jobs.length <= state.jobsPageSize);
+  $("jobsPager").innerHTML = paginationHtml("jobs", state.jobsPage, state.jobsPageSize, state.jobs.length);
 }
 
 function renderSettings(config, backups = []) {
@@ -1000,6 +1035,18 @@ function bindEvents() {
       }).catch(() => {});
       return;
     }
+    const pagerBtn = event.target.closest("[data-page-kind]");
+    if (pagerBtn) {
+      const delta = pagerBtn.dataset.pageDir === "next" ? 1 : -1;
+      if (pagerBtn.dataset.pageKind === "workers") {
+        state.workerPage += delta;
+        renderWorkers();
+      } else if (pagerBtn.dataset.pageKind === "jobs") {
+        state.jobsPage += delta;
+        renderJobs();
+      }
+      return;
+    }
     const actionBtn = event.target.closest("[data-action]");
     if (actionBtn) {
       if (actionBtn.dataset.action === "workers") return showPage("workers");
@@ -1009,7 +1056,10 @@ function bindEvents() {
     const jobBtn = event.target.closest("[data-job]");
     if (jobBtn) openJob(jobBtn.dataset.job).catch((e) => toast(e.message, "bad"));
   });
-  $("workerSearch").addEventListener("input", renderWorkers);
+  $("workerSearch").addEventListener("input", () => {
+    state.workerPage = 1;
+    renderWorkers();
+  });
   $("taskSerial").addEventListener("change", (event) => {
     setSelectedSerial(event.currentTarget.value);
     switchViewerSerialFast(event.currentTarget.value);

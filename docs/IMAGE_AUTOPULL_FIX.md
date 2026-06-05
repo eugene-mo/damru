@@ -13,6 +13,8 @@ python -m damru check-env
 
 `install-image` loads or downloads the baked `damru-redroid:latest` image. The baked image is the recommended path because Chrome, WebView/TTS assets, fonts, warm preferences, and native assets are already inside the container image.
 
+The published tarball is exported from a clean Redroid base with Damru assets applied once. If you rebake, make sure `bake-image --image damru-redroid:latest` starts from the configured Redroid base image, not an older `damru-redroid:latest`, or the tarball will grow from stale stacked layers.
+
 ## Raw/Unbaked Flow
 
 Use this only for baking, debugging, or APK recovery:
@@ -22,6 +24,8 @@ python -m damru install-apks --download
 python -m damru bake-image --image damru-redroid:latest
 docker save damru-redroid:latest -o damru-redroid-latest.tar
 sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
+python -m damru install-image --tar damru-redroid-latest.tar
+python -m damru quick-check --serial 127.0.0.1:5600
 ```
 
 The APK installer extracts to `/home/damru/chrome-apks` by default and validates:
