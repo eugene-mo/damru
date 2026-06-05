@@ -110,6 +110,14 @@ Recorded proof values:
 
 The individual site proof pass used a fixed Pixel 8 Pro Android 14 profile for repeatability. Targets loaded successfully through a runtime-only proxy bridge. The metadata records Android Chrome UA, `navigator.hardwareConcurrency == 8`, `navigator.deviceMemory == 8`, and `navigator.maxTouchPoints == 5`. Timezone and locale are resolved from the active proxy exit at session start; the latest Fingerprint Pro proof used a Philippine exit with `Asia/Manila` and `en-PH`, returned `Bot: Not detected`, `VPN: Not detected`, and showed confidence score `1`. CreepJS reported `0% headless`, `0% stealth`, and WebRTC host/STUN connections blocked.
 
+## APK Rotation Validation
+
+The local APK matrix validated 19 Chrome split-APK folders from `143.0.7499.52` through `148.0.7778.217`. Each folder was tested for Trichrome/Chrome split installation, exact `versionName`, `quick-check`, explicit Chrome launch, PID alive, DNS ping, and a CDP JavaScript probe covering UA, memory, cores, timezone, languages, and WebGL API availability.
+
+Representative full spoof probes passed for Chrome `146.0.7680.177`, `147.0.7727.138`, and `148.0.7778.217`, including Android UA version matching, `navigator.webdriver == false`, `navigator.deviceMemory == 8`, `navigator.hardwareConcurrency == 8`, proxy timezone/language application, GPU spoofing, TTS warm-up, and normal page load.
+
+Chrome 149 APKs are not included yet because tested public bundles were missing the required English/x86/x86_64 split layout.
+
 ## Fixed During Verification
 
 - Added `python -m damru check preflight`, a fast read-only readiness check with JSON, strict, no-ADB, timeout, resource, port, WSL kernel, image, APK, Docker, ADB, binderfs, and config checks.

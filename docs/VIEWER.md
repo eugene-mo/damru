@@ -14,7 +14,7 @@ Open **Work Lab**, select an ADB worker, then click **Open viewer**. The browser
 
 Use **Copy native command** in Work Lab to copy the right terminal command for the current OS and selected worker. On Windows, Damru still manages workers through WSL, but the native viewer command passes the plain TCP serial such as `127.0.0.1:5600` to `scrcpy`.
 
-The UI also exposes URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, and inline logs for the selected worker. These actions are convenience wrappers around allowlisted Damru commands; they do not run arbitrary shell input.
+The UI also exposes URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, and inline logs for the selected worker. Random profile applies the profile, clears stale Chrome tabs, keeps first-run prompts suppressed, and can rotate Chrome to another validated APK version when the APK bundle is present. These actions are convenience wrappers around allowlisted Damru commands; they do not run arbitrary shell input.
 
 ## Commands
 

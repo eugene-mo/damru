@@ -76,12 +76,12 @@ Damru's most advanced stealth layers - including native GPU binary patching and 
 *   **Zero JS Injection**: All spoofing is executed at the OS, Binary, and CDP levels. No brittle `Object.defineProperty` hacks.
 *   **Massive Device Database**: Built-in profiles for 49 real Android devices (Samsung, Pixel, Xiaomi, OnePlus, Nothing, Honor, Vivo, POCO, etc.) with realistic hardware specifications.
 *    **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
-*    **Browser Version & Client Hints Randomization**: Dynamically selects from a database of verified Chrome versions and generates perfectly accurate `sec-ch-ua` Client Hints, including Chromium GREASE brand permutations.
+*    **Browser Version & Client Hints Randomization**: Dynamically selects from the validated Chrome APK bundle, rotates compatible Chrome builds with random profiles, and generates matching `sec-ch-ua` Client Hints including Chromium GREASE brand permutations.
 *    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
 
 *   **Fast Preflight Checks**: `python -m damru check preflight` performs read-only Docker, ADB, binderfs, image, APK, resource, WSL kernel, port, and config checks with JSON output for fleet scripts.
 *   **Experimental Local Dashboard**: `python -m damru ui` provides setup status, worker controls, Work Lab actions, browser viewer, gallery cleanup, logs, quick checks, and native viewer command copy from localhost.
-*   **Auto Image & APK Management**: Loads/downloads the baked Redroid image, finds local APK bundles, and auto-downloads the raw Chrome/WebView/TTS asset bundle only when an unbaked/raw image path needs it.
+*   **Auto Image & APK Management**: Loads/downloads the baked Redroid image, finds local APK bundles, and auto-downloads the raw Chrome/WebView/TTS/resetprop asset bundle only when an unbaked/raw image path needs it.
 *   **Font & Voice Randomization**: Installs custom TTS engines and extra system fonts, randomizing them per session.
 *   **Hardware Status Spoofing**: Fakes battery levels, charging status, and even audio sample rates (48kHz) to mirror real mobile hardware behavior.
 *   **Hardware Overrides**: Spoofs CPU cores, RAM (via syscall hooks), and touch points (e.g., 5-point touch) directly via native OS patching and CDP.
@@ -188,10 +188,12 @@ damru-project/
 +-- tests/                 # Stealth & Stability Benchmarks
 |   +-- benchmark_auto.py  # Automated Anti-Bot probe
 |   +-- test_stealth.py    # Unit tests for fingerprinting integrity
-+-- chrome-apks/           # Pre-validated Mobile Assets
-|   +-- espeak.apk         # TTS engines for Voice fingerprinting
++-- chrome-apks/           # Pre-validated mobile APK bundle
+|   +-- espeak.apk         # TTS engine APK
+|   +-- google_tts.apk     # Google TTS APK
+|   +-- rhvoice.apk        # RHVoice APK
 |   +-- magisk.apk         # Local resetprop source for raw Redroid
-|   +-- 145.x/             # Specific Chrome/WebView versions
+|   +-- 143.x-148.x/       # Validated Chrome split-APK versions
 +-- docs/                  # Roadmaps & Infrastructure Plans
 +-- scripts/               # Maintenance & Image Baking Utils
 +-- tools/                 # External Debugging Tools (Magisk.apk)
@@ -261,22 +263,26 @@ Automatic install:
 python -m damru install-apks --download
 ```
 
-`install-apks` downloads the APK asset bundle, extracts to `/home/damru/chrome-apks` on Linux/WSL by default, validates that APK files exist, and updates `CHROME_APK` only when needed. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
+`install-apks` downloads the APK asset bundle, extracts to `/home/damru/chrome-apks` on Linux/WSL by default, validates the top-level support APKs and Chrome split APK folders, and updates `CHROME_APK` only when needed. `install-deps` and `setup` also run this automatically when no baked image and no local APKs are available.
 
 Extract/copy the bundle so one bundle root contains this layout. The bundle is not only Chrome; it also includes Trichrome WebView and TTS voice APKs. Damru ships `magisk.apk` and copies it into this bundle automatically when raw/unbaked Redroid needs a local `resetprop` source:
 
 ```text
 chrome-apks/
-  143.0.7499.52/*.apk
-  144.0.7559.132/*.apk
-  145.0.7632.75/*.apk
+  143.0.7499.52/
+  144.0.7559.132/
+  145.0.7632.75/
+  146.0.7680.31/
+  ...
+  148.0.7778.217/
+  TrichromeWebView.apk
   espeak.apk
   google_tts.apk
   rhvoice.apk
   magisk.apk
 ```
 
-Damru auto-selects only Chrome versions that pass the current raw Redroid voice/fingerprint smoke tests. Chrome `145.0.7632.75` can still be selected manually with `CHROME_APK` or `chrome_apk=`, but auto mode skips it until its Android TTS voice behavior is stable.
+The current bundle contains 19 validated Chrome split-APK versions from `143.0.7499.52` through `148.0.7778.217`. Random profile actions can rotate Chrome to another validated installed version when the bundle is present. Damru intentionally skips APKMirror bundles that are not compatible with the required English/x86/x86_64 split layout; no Chrome 149 bundle is included yet for that reason.
 
 Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
 
@@ -296,7 +302,7 @@ python -m damru check-env
 python -m damru bake-image --image damru-redroid:latest
 ```
 
-Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APKs, `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, `rhvoice.apk`, and `magisk.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at the specific Chrome split-APK version directory:
+Damru auto-searches `/home/damru/chrome-apks`, package-local `chrome-apks/`, the current directory's `chrome-apks/`, and the parent directory's `chrome-apks/`. From that one bundle root it discovers Chrome split APK folders, `TrichromeWebView.apk`, `google_tts.apk`, `espeak.apk`, `rhvoice.apk`, and `magisk.apk`. If automatic detection fails, keep the full `chrome-apks/` bundle together and point config/code at a specific Chrome split-APK version directory:
 
 ```python
 CHROME_APK = "/home/damru/chrome-apks/145.0.7632.75"
@@ -666,7 +672,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing) is for manual recovery if automatic download is unavailable.
+   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, validates the 143-148 Chrome split-APK folders, and configures `CHROME_APK` only when needed. The [Google Drive APK bundle](https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing) is for manual recovery if automatic download is unavailable.
 
    If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS/Magisk APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 
@@ -688,6 +694,8 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    # Or specify an absolute path:
    # CHROME_APK = "/mnt/c/path/to/damru/chrome-apks/145.0.7632.75"
    ```
+
+   When `CHROME_APK = None` and the bundle exists, random profile actions can also rotate to another validated Chrome APK version so the Chrome major/minor version follows the selected profile instead of staying fixed forever.
 
 3. **Pool Settings (`NUM_DEVICES` & `MODE`)**:
    ```python

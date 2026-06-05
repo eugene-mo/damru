@@ -1,90 +1,54 @@
-# Fix: redroid image auto-pull on first run
+# Image and APK Readiness
 
-Addresses Gap #1 (Image Management) from `docs/AUTOMATION_GAPS_PLAN.md`.
+Status: implemented. Current users should prefer the documented CLI flow instead of manually pulling Redroid images.
 
-Status: historical implementation note. Current users should prefer `python -m damru install-image` for the baked image and `python -m damru check preflight` / `python -m damru check-env` for readiness.
-
-## Problem
-
-`RedroidManager.start_container()` ran `docker run ... REDROID_IMAGE` with no
-existence check. `REDROID_IMAGE` defaults to the baked tag
-`damru-redroid:latest`, which does not exist on a clean machine until
-`scripts/bake_image.py` is run - so the first run crashed with
-`docker: Error response from daemon: No such image: damru-redroid:latest`.
-
-Current setup note: Windows/WSL Docker commands now run through `wsl -u root`
-instead of piping a WSL sudo password through the shell. `WSL_PASSWORD` remains
-in config only as a compatibility placeholder and is not required by the current
-setup path.
-
-## Changes
-
-Implemented pieces:
-
-1. **Auto-pull/tag the launch image** -
-   - `config.py*`: add `REDROID_BASE_IMAGE = "redroid/redroid:14.0.0_64only-latest"`.
-   - `docker.py`: add `RedroidManager._image_exists()` and `ensure_image()`:
-     - present -> no-op
-     - baked image (`REDROID_IMAGE`) missing -> pull `REDROID_BASE_IMAGE`, tag
-       it as the launch image (unbaked but functional; warns to bake for
-       faster cold starts)
-     - any other image missing -> pull; **raise `DamruError`** on failure
-       instead of letting `docker run` crash opaquely
-   - `docker.py`: call `await self.ensure_image(REDROID_IMAGE)` at the top of
-     `start_container()`.
-
-2. **CLI verification path** -
-   - `python -m damru check-env` reports Docker, binderfs, Chrome APKs, Redroid
-     image state, and the Damru Playwright `crPage.js` patch.
-   - `python -m damru check preflight` performs the fast read-only version for
-     CI/fleet scripts without pulling images, starting containers, mounting
-     binderfs, or editing networking.
-   - `python -m damru install-image` loads or downloads the baked
-     `damru-redroid:latest` tarball when available.
-   - `python -m damru install-apks --download` downloads/extracts the raw
-     Chrome/WebView/TTS bundle only when raw/unbaked Redroid needs local APKs.
-   - `python -m damru install-deps` installs Linux/WSL dependencies and fails
-     clearly when the WSL kernel lacks required Docker netfilter modules.
-   - `python -m damru fix-wsl` retries safe WSL Docker, binderfs, and
-     netfilter setup and explains when a kernel replacement is required.
-
-## Scope / follow-ups (not done here)
-
-- `bake_image()` starts the temp container from `REDROID_IMAGE` (the baked
-  tag) rather than `REDROID_BASE_IMAGE`, which is circular on a clean machine.
-  Left untouched by request; candidate for a separate change.
-- Other gaps in `AUTOMATION_GAPS_PLAN.md` (storage location and deeper
-  self-healing) remain future work.
-
-## Tests
-
-`pyproject.toml` gains `[tool.pytest.ini_options]` (asyncio auto mode,
-`pythonpath = ["."]`).
-
-| File | Type | Runs |
-|------|------|------|
-| `tests/test_images_unit.py` | Unit (mocks the `_run_cmd` subprocess boundary) | Anywhere |
-| `tests/test_images_integration.py` | Integration (real local Docker, pulls `hello-world`) | Skipped unless `docker` CLI + daemon present |
-| `tests/test_images_e2e.py` | E2E (real base-image pull + tag, no mocks) | Skipped unless `DAMRU_E2E=1` |
-
-### Running
-
-This repo's global Python env has unrelated broken pytest plugins
-(`logfire`, `pytest_ansible`) due to a `typing_extensions`/`opentelemetry`
-version clash, so plugin autoload must be disabled locally:
+## Recommended Flow
 
 ```bash
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest \
-  tests/test_images_unit.py tests/test_images_integration.py tests/test_images_e2e.py \
-  -p pytest_asyncio.plugin
+python -m damru install-deps -y
+python -m damru install-image
+python -m damru check preflight
+python -m damru check-env
 ```
 
-In a clean environment the project config is enough:
+`install-image` loads or downloads the baked `damru-redroid:latest` image. The baked image is the recommended path because Chrome, WebView/TTS assets, fonts, warm preferences, and native assets are already inside the container image.
+
+## Raw/Unbaked Flow
+
+Use this only for baking, debugging, or APK recovery:
 
 ```bash
-python -m pytest tests/test_images_unit.py
+python -m damru install-apks --download
+python -m damru bake-image --image damru-redroid:latest
+docker save damru-redroid:latest -o damru-redroid-latest.tar
+sha256sum damru-redroid-latest.tar > damru-redroid-latest.tar.sha256
 ```
 
-Last local result: **6 unit passed, 1 integration passed** (real Docker on
-the dev box), **1 e2e skipped** (opt-in). The e2e is delivered but requires
-the redroid host (WSL2/Linux) to execute - it has not been run here.
+The APK installer extracts to `/home/damru/chrome-apks` by default and validates:
+
+- Chrome split-APK version folders
+- `TrichromeWebView.apk`
+- `google_tts.apk`
+- `espeak.apk`
+- `rhvoice.apk`
+- Damru's packaged `magisk.apk` when raw Redroid needs a local `resetprop` source
+
+The current APK bundle contains 19 validated Chrome versions from `143.0.7499.52` through `148.0.7778.217`. Random profile actions can rotate Chrome versions when this bundle exists.
+
+## Readiness Checks
+
+`python -m damru check preflight` is fast and read-only. It does not install packages, pull/load images, mount binderfs, start containers, edit iptables, or change `.wslconfig`. Use `--json` for automation:
+
+```bash
+python -m damru check preflight --json --timeout 3
+```
+
+`python -m damru check-env` is slower and deeper. It verifies setup details such as Docker, binderfs, image/APK discovery, ADB, Playwright patching, and optional viewer tooling.
+
+## Failure Handling
+
+- Missing baked image: run `python -m damru install-image`.
+- Missing raw APKs: run `python -m damru install-apks --download`.
+- WSL Docker/binderfs/network issue: run `python -m damru fix-wsl`.
+- Worker DNS/internet issue: run `python -m damru fix-internet --all`.
+- Unsupported Debian/custom kernel: use Ubuntu 24.04 or a binderfs-enabled kernel.

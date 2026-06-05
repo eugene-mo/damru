@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Expanded the raw Chrome APK bundle to 19 validated Chrome split-APK versions from `143.0.7499.52` through `148.0.7778.217`; Chrome 149 is intentionally excluded until a compatible English/x86/x86_64 bundle is available.
+- Made random profile actions rotate Chrome APK versions when the validated APK bundle is present, while keeping Chrome first-run prompts suppressed and stale tabs cleared.
+- Verified the APK matrix across install, exact Chrome `versionName`, `quick-check`, Chrome launch/PID, DNS, CDP probes, and representative full spoof sessions for Chrome 146/147/148 builds.
 - Fixed authenticated HTTP/SOCKS proxy handling across UI Open URL, `open-url`, `random-profile`, and full Damru/benchmark sessions by adding an automatic local no-auth proxy bridge for Android's `host:port`-only system proxy setting.
 - Changed UI Open URL to use a full Damru stealth session instead of raw Android Chrome launch, so Android OS, UA/client hints, timezone, locale, proxy, WebRTC, GPU, hardware, and TLS setup are applied before navigation.
 - Made random profile changes proxy-aware: timezone/locale follow the current proxy exit, Chrome data is reset, stale tabs are cleared, and Chrome first-run prompts remain suppressed for the next launch.
@@ -32,8 +35,7 @@
 - Fixed README shields.io badge URLs that lost the `?style=` query separator.
 - Removed the old `ubuntu-proof-summary.png` proof asset and all references to it.
 - Fixed Google Drive manual-download links that lost `?usp=sharing` during text cleanup.
-- Made setup choose a Chrome APK version that passes raw Redroid TTS voice smoke tests instead of configuring Chrome 145 by default.
-- Made Redroid auto Chrome selection skip Chrome `145.0.7632.75` until its raw Redroid TTS voice behavior is stable; manual `CHROME_APK` selection still works.
+- Made setup choose from the validated Chrome APK bundle instead of pinning one Chrome version by default.
 - Shipped `damru/assets/magisk.apk` and `damru/assets/libfakemem.c` in the Python package so pip installs no longer need third-party runtime APK downloads or a source checkout for memory spoofing.
 - Removed runtime APK downloads from Magisk, F-Droid eSpeak, NikGapps GoogleTTS, and RHVoice paths; runtime APK use now comes from Damru's bundle/package assets.
 - Fixed the Playwright `crPage.js` Runtime patch syntax and added regression tests for corrupted patch repair.
