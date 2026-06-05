@@ -2182,7 +2182,7 @@ def _random_profile(args: argparse.Namespace) -> int:
             return 1
         ok = True
         for serial in serials:
-            code = _random_profile(argparse.Namespace(serial=serial, all=False))
+            code = _random_profile(argparse.Namespace(serial=serial, all=False, proxy=getattr(args, "proxy", None), http_proxy=getattr(args, "http_proxy", None)))
             ok = ok and code == 0
         return 0 if ok else 1
     serial = _resolve_serial(args.serial)
@@ -2202,23 +2202,36 @@ def _random_profile(args: argparse.Namespace) -> int:
         adb = ADB(serial)
         real_android = await adb.get_prop("ro.build.version.release")
         device = get_random_device(android_version=real_android.strip() or None)
-        profile = build_profile(device)
+        explicit_proxy = getattr(args, "proxy", None)
+        explicit_http_proxy = getattr(args, "http_proxy", None)
+        current_http_proxy = explicit_http_proxy
+        if not explicit_proxy and not current_http_proxy:
+            current_http_proxy = await adb.shell("settings get global http_proxy", allow_failure=True)
+        current_http_proxy = (current_http_proxy or "").strip()
+        if current_http_proxy in {"", "null", ":0"}:
+            current_http_proxy = None
+        profile = build_profile(device, proxy=explicit_proxy, http_proxy=current_http_proxy)
         root = RootOps(adb)
         await root.check_root()
         chrome = ChromeManager(adb)
         await chrome.detect_package(retries=8, delay=1.0)
         await chrome.force_stop()
+        await chrome.clear_all_data()
         await root.apply_device_props(device, safe_only=True, parallel=True)
         await root.apply_version_release(device)
         await root.apply_timezone(profile.timezone)
         await root.apply_locale(profile.locale)
+        applied_proxy = _apply_android_proxy(serial, explicit_proxy, current_http_proxy)
         await adb.shell(f"wm size {profile.screen_width}x{profile.screen_height}", allow_failure=True)
         await adb.shell(f"wm density {profile.density_dpi}", allow_failure=True)
         accept_lang = build_accept_language(profile.locale)
         await chrome.write_command_line(profile.chrome_flags)
         await chrome.patch_preferences(profile.locale, accept_lang)
+        if applied_proxy:
+            await root.apply_webrtc_block(chrome.package)
         await chrome.force_stop()
-        return f"{profile.description}; {profile.screen_width}x{profile.screen_height}@{profile.density_dpi}; tz={profile.timezone}; locale={profile.locale}"
+        proxy_note = f"; proxy={applied_proxy}" if applied_proxy else ""
+        return f"{profile.description}; {profile.screen_width}x{profile.screen_height}@{profile.density_dpi}; tz={profile.timezone}; locale={profile.locale}{proxy_note}"
 
     try:
         import asyncio
@@ -2316,6 +2329,72 @@ def _ensure_chrome_for_open_url(serial: str, package: str) -> int:
         return 1
     return 0
 
+def _proxy_bridge_upstream(proxy: str | None, http_proxy: str | None = None) -> str | None:
+    from .proxy_runtime import proxy_bridge_upstream
+
+    return proxy_bridge_upstream(proxy, http_proxy)
+
+def _android_proxy_host(serial: str) -> str:
+    from .proxy_runtime import android_proxy_host_from_route
+
+    result = _run_adb_text(serial, "shell", "ip", "route", "show", "default", timeout=8)
+    text = result.stdout or result.stderr or ""
+    return android_proxy_host_from_route(text)
+
+def _ensure_proxy_bridge(serial: str, upstream: str) -> str:
+    from .proxy_runtime import ensure_proxy_bridge
+
+    port = ensure_proxy_bridge(upstream)
+    return f"{_android_proxy_host(serial)}:{port}"
+
+def _apply_webrtc_block_sync(serial: str, chrome_package: str = "com.android.chrome") -> None:
+    async def _run_block() -> None:
+        from .adb import ADB
+        from .root import RootOps
+
+        adb = ADB(serial)
+        root = RootOps(adb)
+        await root.check_root()
+        await root.apply_webrtc_block(chrome_package)
+
+    import asyncio
+
+    asyncio.run(_run_block())
+
+def _dismiss_chrome_prompts_sync(serial: str, chrome_package: str = "com.android.chrome") -> None:
+    async def _dismiss() -> None:
+        from .adb import ADB
+        from .chrome import ChromeManager
+
+        chrome = ChromeManager(ADB(serial), package=chrome_package)
+        await chrome.dismiss_fre(max_attempts=4)
+
+    import asyncio
+
+    asyncio.run(_dismiss())
+
+def _apply_android_proxy(serial: str, proxy: str | None = None, http_proxy: str | None = None) -> str | None:
+    from .proxy import resolve_system_proxy
+
+    bridge_upstream = _proxy_bridge_upstream(proxy, http_proxy)
+    system_proxy = _ensure_proxy_bridge(serial, bridge_upstream) if bridge_upstream else resolve_system_proxy(proxy=proxy, http_proxy=http_proxy)
+    if not system_proxy:
+        if proxy or http_proxy:
+            raise ValueError("Proxy cannot be applied to Android. Use an HTTP proxy URL or host:port.")
+        return None
+    host, _, port = system_proxy.rpartition(":")
+    if not host or not port.isdigit():
+        raise ValueError("Proxy must resolve to host:port for Android.")
+    for parts in (
+        ("settings", "put", "global", "http_proxy", system_proxy),
+        ("settings", "put", "global", "global_http_proxy_host", host),
+        ("settings", "put", "global", "global_http_proxy_port", port),
+    ):
+        result = _run_adb_text(serial, "shell", *parts, timeout=12)
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "Failed to apply Android proxy.").strip())
+    return system_proxy
+
 def _open_url(args: argparse.Namespace) -> int:
     serial = _resolve_serial(args.serial)
     if not serial:
@@ -2331,6 +2410,19 @@ def _open_url(args: argparse.Namespace) -> int:
     chrome_code = _ensure_chrome_for_open_url(serial, package)
     if chrome_code != 0:
         return chrome_code
+    try:
+        system_proxy = _apply_android_proxy(serial, getattr(args, "proxy", None), getattr(args, "http_proxy", None))
+    except Exception as exc:
+        print(f"Proxy setup failed: {exc}", file=sys.stderr)
+        return 1
+    if system_proxy:
+        try:
+            _apply_webrtc_block_sync(serial, package)
+        except Exception as exc:
+            print(f"WebRTC leak guard failed: {exc}", file=sys.stderr)
+            return 1
+        _run_adb_text(serial, "shell", "am", "force-stop", package, timeout=10)
+        print(f"Android proxy applied: {system_proxy}")
     candidates: list[tuple[str, tuple[str, ...]]] = [
         (package, ("com.google.android.apps.chrome.Main", "org.chromium.chrome.browser.ChromeTabbedActivity")),
     ]
@@ -2356,6 +2448,8 @@ def _open_url(args: argparse.Namespace) -> int:
                 "am",
                 "start",
                 "-W",
+                "-f",
+                "0x10008000",
                 "--activity-clear-top",
                 "-n",
                 activity,
@@ -2400,6 +2494,8 @@ def _open_url(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+
+    _dismiss_chrome_prompts_sync(serial, launched_package)
 
     print(f"Opened URL in Chrome ({launched_package}) on {serial}: {url}")
     return 0
@@ -2696,6 +2792,8 @@ def build_parser() -> argparse.ArgumentParser:
     random_profile = sub.add_parser("random-profile", help="apply a random stealth profile to an ADB worker")
     random_profile.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
     random_profile.add_argument("--all", action="store_true", help="apply random profiles to all running Damru workers")
+    random_profile.add_argument("--proxy", default=None, help="proxy URL used for geo/timezone/locale and Android HTTP proxy")
+    random_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     random_profile.set_defaults(func=_random_profile)
 
     stealth_all = sub.add_parser("ui-stealth-check-all", help=argparse.SUPPRESS)
@@ -2717,6 +2815,8 @@ def build_parser() -> argparse.ArgumentParser:
     open_url.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
     open_url.add_argument("--url", required=True, help="http:// or https:// URL to open")
     open_url.add_argument("--package", default="com.android.chrome", help="browser package to launch; default is Chrome")
+    open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL; HTTP endpoint is applied to Android before navigation")
+    open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     open_url.set_defaults(func=_open_url)
 
     record = sub.add_parser("record", help="record a short MP4 video from an ADB device")

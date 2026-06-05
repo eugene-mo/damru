@@ -992,6 +992,7 @@ function bindEvents() {
       const actionMap = { restart: "restart-worker", stop: "stop-worker", resume: "resume-worker", delete: "delete-worker", "fix-internet": "fix-internet", "random-profile": "random-profile" };
       const action = actionMap[workerBtn.dataset.workerAction] || "stop-worker";
       const payload = ["fix-internet", "random-profile"].includes(action) ? { serial: workerBtn.dataset.serial || "" } : { index: workerBtn.dataset.index };
+      if (action === "random-profile") payload.proxy = $("taskProxy")?.value || "";
       const row = workerBtn.closest("tr");
       runAction(action, payload, workerBtn).then(() => {
         if (action === "delete-worker") row?.remove();
@@ -1026,11 +1027,11 @@ function bindEvents() {
       $("taskUrl").focus();
       return;
     }
-    runAction("navigate", { serial: $("taskSerial").value, url }, event.currentTarget).catch(() => {});
+    runAction("navigate", { serial: $("taskSerial").value, url, proxy: $("taskProxy").value }, event.currentTarget).catch(() => {});
   });
   $("fixInternetBtn").addEventListener("click", (event) => runAction("fix-internet", { serial: $("taskSerial").value }, event.currentTarget).catch(() => {}));
-  $("randomProfileBtn").addEventListener("click", (event) => runAction("random-profile", { serial: $("taskSerial").value }, event.currentTarget).catch(() => {}));
-  $("randomProfileAllBtn").addEventListener("click", (event) => runAction("random-profile", { all: true }, event.currentTarget).catch(() => {}));
+  $("randomProfileBtn").addEventListener("click", (event) => runAction("random-profile", { serial: $("taskSerial").value, proxy: $("taskProxy").value }, event.currentTarget).catch(() => {}));
+  $("randomProfileAllBtn").addEventListener("click", (event) => runAction("random-profile", { all: true, proxy: $("taskProxy").value }, event.currentTarget).catch(() => {}));
   $("quickCheckBtn").addEventListener("click", (event) => runAction("quick-check", { serial: $("taskSerial").value }, event.currentTarget).catch(() => {}));
   $("screenshotBtn").addEventListener("click", (event) => runAction("screenshot", { serial: $("taskSerial").value }, event.currentTarget).catch(() => {}));
   $("runProofBtn").addEventListener("click", (event) => runAction("proof", { serial: $("taskSerial").value, proxy: $("taskProxy").value }, event.currentTarget).catch(() => {}));

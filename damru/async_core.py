@@ -204,11 +204,26 @@ class AsyncDamru:
         except Exception as e:
             logger.debug("MuMu dynamic profile apply skipped: %s", e)
 
-        # Step 4: Build profile (includes screen variant randomization)
+        # Step 4: Build profile (includes screen variant randomization).
+        # Android can only store host:port as system proxy. Authenticated
+        # HTTP/SOCKS proxies are routed through Damru's local no-auth bridge.
+        route_text = ""
+        try:
+            route_text = await self._adb.shell("ip route show default; ip route", timeout=8, allow_failure=True)
+        except Exception:
+            route_text = ""
+        android_proxy = None
+        try:
+            from .proxy_runtime import resolve_android_proxy
+
+            android_proxy = resolve_android_proxy(self._proxy, self._http_proxy, route_text=route_text)
+        except Exception as exc:
+            raise DamruError(f"Proxy setup failed: {exc}") from exc
         self._profile = build_profile(
             target_device,
             proxy=self._proxy,
             http_proxy=self._http_proxy,
+            android_proxy=android_proxy,
             timezone=self._timezone,
             locale=self._locale,
         )
@@ -568,14 +583,32 @@ class AsyncDamru:
         page = None
         try:
             page = await self._context.new_page()
-            await page.goto("https://ipapi.co/json/", wait_until="domcontentloaded", timeout=30000)
-            text = await page.evaluate("document.body.innerText")
-            data = json.loads(text)
-            timezone = data.get("timezone")
-            country_code = data.get("country_code") or data.get("country")
-            if not timezone:
+            data = None
+            for url in (
+                "https://ipapi.co/json/",
+                "https://ipinfo.io/json",
+                "http://ip-api.com/json/?fields=status,query,timezone,countryCode",
+            ):
+                try:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    text = (await page.evaluate("document.body.innerText") or "").strip()
+                    if not text.startswith("{"):
+                        continue
+                    parsed = json.loads(text)
+                    timezone = parsed.get("timezone")
+                    country_code = parsed.get("country_code") or parsed.get("country") or parsed.get("countryCode")
+                    if timezone:
+                        data = {"timezone": timezone, "country_code": country_code}
+                        break
+                except Exception:
+                    continue
+            if not data:
                 self._sync_timezone = self._profile.timezone
+                logger.debug("Browser proxy GeoIP sync skipped; keeping startup proxy geo")
                 return
+
+            timezone = data["timezone"]
+            country_code = data.get("country_code")
 
             changed = []
             if self._timezone is None and timezone != self._profile.timezone:

@@ -704,12 +704,16 @@ def build_command(action: str, payload: dict[str, Any]) -> tuple[str, list[str],
             cmd.append("--all")
         return "Fix internet", cmd, timeout, artifact
     if action == "random-profile":
+        proxy = str(payload.get("proxy") or "").strip()
+        extra: list[str] = []
+        if proxy:
+            extra.extend(["--proxy", proxy])
         if payload.get("all"):
-            return "Random stealth profile all", package_command("random-profile", "--all"), COMMAND_TIMEOUTS.get("random-profile-all", timeout), artifact
+            return "Random stealth profile all", package_command("random-profile", "--all", *extra), COMMAND_TIMEOUTS.get("random-profile-all", timeout), artifact
         serial = str(payload.get("serial") or "").strip()
         if not serial:
             raise ValueError("Choose an online ADB device first.")
-        return "Random stealth profile", package_command("random-profile", "--serial", serial), timeout, artifact
+        return "Random stealth profile", package_command("random-profile", "--serial", serial, *extra), timeout, artifact
     if action == "devices":
         return "List ADB devices", package_command("devices"), timeout, artifact
     if action == "wsl-kernel-status":
@@ -740,7 +744,11 @@ def build_command(action: str, payload: dict[str, Any]) -> tuple[str, list[str],
             raise ValueError("Choose an online ADB device before opening a URL.")
         if not re.match(r"^https?://", url, re.IGNORECASE):
             raise ValueError("Enter a URL that starts with http:// or https://.")
-        return "Open URL", package_command("open-url", "--serial", serial, "--url", url), timeout, artifact
+        proxy = str(payload.get("proxy") or "").strip()
+        cmd = package_command("open-url", "--serial", serial, "--url", url)
+        if proxy:
+            cmd.extend(["--proxy", proxy])
+        return "Open URL", cmd, timeout, artifact
     if action == "record":
         serial = str(payload.get("serial") or "").strip()
         seconds = max(1, min(int(payload.get("time_limit") or 15), 180))

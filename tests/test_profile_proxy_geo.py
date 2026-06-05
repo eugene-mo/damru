@@ -52,6 +52,54 @@ def test_explicit_timezone_still_overrides_proxy_geo(monkeypatch):
     assert profile.locale == "en-US"
 
 
+def test_proxy_geo_keeps_authenticated_proxy_url(monkeypatch):
+    seen = []
+
+    def fake_geo(proxy):
+        seen.append(proxy)
+        return {
+            "timezone": "Asia/Manila",
+            "locale": "en-PH",
+            "country_code": "PH",
+            "ip": "",
+        }
+
+    monkeypatch.setattr("damru.profiles.resolve_proxy_geo", fake_geo)
+
+    profile = build_profile(
+        get_device("pixel_8_pro"),
+        proxy="http://user:pass@proxy.example:10000",
+    )
+
+    assert seen == ["http://user:pass@proxy.example:10000"]
+    assert profile.timezone == "Asia/Manila"
+    assert profile.locale == "en-PH"
+    assert profile.android_http_proxy == "proxy.example:10000"
+
+def test_profile_can_use_pre_resolved_android_bridge(monkeypatch):
+    seen = []
+
+    def fake_geo(proxy):
+        seen.append(proxy)
+        return {
+            "timezone": "Pacific/Honolulu",
+            "locale": "en-US",
+            "country_code": "US",
+            "ip": "",
+        }
+
+    monkeypatch.setattr("damru.profiles.resolve_proxy_geo", fake_geo)
+
+    profile = build_profile(
+        get_device("pixel_8_pro"),
+        proxy="http://user:pass@proxy.example:823",
+        android_proxy="172.17.0.1:18993",
+    )
+
+    assert seen == ["http://user:pass@proxy.example:823"]
+    assert profile.timezone == "Pacific/Honolulu"
+    assert profile.android_http_proxy == "172.17.0.1:18993"
+
 def test_geo_locale_uses_real_country_variants(monkeypatch):
     monkeypatch.setattr("damru.proxy.random.choice", lambda values: values[1] if len(values) > 1 else values[0])
 

@@ -707,7 +707,7 @@ Auto locale selection covers standard ISO country codes plus CLDR exceptional te
    LOCALE = None       # Auto from proxy country when unset
    ```
 
-   If your upstream proxy is SOCKS5 but Android needs an HTTP CONNECT proxy, run or provide a local HTTP bridge and pass it as `http_proxy` in code or `HTTP_PROXY` in config.
+   Authenticated HTTP and SOCKS5 proxies are supported. Damru automatically starts a local no-auth bridge when Android cannot store proxy credentials directly, then points Android Chrome at that bridge. This avoids Chrome proxy sign-in dialogs while keeping proxy-based timezone, locale, and WebRTC leak guards active. Advanced users can still pass an explicit `HTTP_PROXY`/`http_proxy` bridge endpoint when they manage their own proxy bridge.
 
 ### Docker Storage Location (Crucial for Windows Users)
 Redroid containers consume significant disk space. If you are using WSL2 Docker, it saves data to your `ext4.vhdx` virtual drive on the `C:` drive by default, which can quickly fill up your primary SSD.

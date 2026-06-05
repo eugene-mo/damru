@@ -61,20 +61,28 @@ async def _extract_creepjs(page: Page) -> Dict[str, Any]:
 
 async def _extract_browserscan(page: Page) -> Dict[str, Any]:
     """Extract BrowserScan score."""
-    try:
-        await page.wait_for_selector(
-            "[class*='score'], [class*='Score'], [class*='result']",
-            timeout=20000,
-        )
-    except Exception:
-        pass
-    return await page.evaluate("""() => {
-        const all = document.body.innerText;
-        const scoreMatch = all.match(/(\\d+)\\s*%/);
-        return {
-            score: scoreMatch ? scoreMatch[1] + "%" : "N/A",
-        };
-    }""")
+    last_error = None
+    for _ in range(4):
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=10000)
+            try:
+                await page.wait_for_selector(
+                    "[class*='score'], [class*='Score'], [class*='result']",
+                    timeout=8000,
+                )
+            except Exception:
+                pass
+            return await page.evaluate("""() => {
+                const all = document.body.innerText;
+                const scoreMatch = all.match(/(\\d+)\\s*%/);
+                return {
+                    score: scoreMatch ? scoreMatch[1] + "%" : "N/A",
+                };
+            }""")
+        except Exception as exc:
+            last_error = exc
+            await sleep(2)
+    raise last_error or RuntimeError("BrowserScan extraction failed")
 
 
 async def _extract_sannysoft(page: Page) -> Dict[str, Any]:

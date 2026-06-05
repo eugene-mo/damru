@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed authenticated HTTP/SOCKS proxy handling across UI Open URL, `open-url`, `random-profile`, and full Damru/benchmark sessions by adding an automatic local no-auth proxy bridge for Android's `host:port`-only system proxy setting.
+- Made random profile changes proxy-aware: timezone/locale follow the current proxy exit, Chrome data is reset, stale tabs are cleared, and Chrome first-run prompts remain suppressed for the next launch.
+- Hardened BrowserScan benchmark extraction against page self-navigation and verified the full benchmark set passes with bridged authenticated proxy routing.
 - Merged physical ADB safety behavior: auto-detection now prefers TCP Redroid endpoints, then `emulator-*`, and refuses physical-looking USB serials by default unless `DAMRU_ALLOW_PHYSICAL=1` is explicitly set for a disposable test device.
 - Added focused ADB unit tests for TCP preference, emulator fallback, physical USB refusal, and explicit physical override.
 - Updated README/docs for the current Ubuntu 24.04 and Ubuntu WSL2 beta path, minimum capacity planning, preflight, local UI, viewer workflows, image/APK handling, WSL kernel behavior, proof results, and legal/fork policy.

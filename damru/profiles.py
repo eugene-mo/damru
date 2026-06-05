@@ -34,6 +34,7 @@ def build_profile(
     device: AndroidDevice,
     proxy: Optional[str] = None,
     http_proxy: Optional[str] = None,
+    android_proxy: Optional[str] = None,
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
 ) -> DamruProfile:
@@ -49,10 +50,12 @@ def build_profile(
     """
     # Resolve Android system HTTP proxy first. When present, use that same
     # path for GeoIP so browser timezone matches the proxy Chrome actually uses.
-    android_proxy = resolve_system_proxy(proxy, http_proxy)
+    android_proxy = android_proxy or resolve_system_proxy(proxy, http_proxy)
 
-    # Auto-detect timezone/locale from the browser proxy path.
-    geo_proxy = android_proxy or proxy
+    # Auto-detect timezone/locale through an authenticated URL when present.
+    # Android settings store only host:port, so using that stripped value for
+    # GeoIP can fail against username/password proxies.
+    geo_proxy = http_proxy or proxy or android_proxy
     if geo_proxy and (timezone is None or locale is None):
         geo = resolve_proxy_geo(geo_proxy)
         if timezone is None:
