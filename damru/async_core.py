@@ -1242,7 +1242,8 @@ class AsyncDamru:
         }
 
         # Build acceptLanguage from profile locale (bare tags, no q-values).
-        # This overrides the HTTP Accept-Language header at C++ level.
+        # This keeps HTTP Accept-Language, navigator.language/languages, and
+        # Intl locale aligned with the selected proxy/profile country.
         profile_locale = self._profile.locale if self._profile else "en-US"
         accept_lang_header = build_accept_language(profile_locale)
         # Strip q-values for CDP - only bare language tags needed

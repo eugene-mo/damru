@@ -1158,16 +1158,19 @@ CHROME_VERSIONS: List[Tuple[str, int]] = [
 def _compute_grease_brand(major: int) -> Tuple[str, str]:
     """Compute the Chromium GREASE brand name and version for a major version.
 
-    Mirrors Chromium's GetGreasedUserAgentBrandVersion() algorithm:
-    - Two chars picked from a rotation set based on major version
-    - Version is major % 96 (always < 100)
+    Mirrors the modern Chromium UA-CH GREASE shape seen on Android Chrome:
+    - Two punctuation characters are rotated by major version.
+    - Version rotates through Chromium's GREASE versions.
+    - No leading whitespace/punctuation is emitted, matching current Android
+      Chrome low-entropy headers such as ``Not:A-Brand`` for Chrome 145.
 
     Returns (brand_name, brand_version) tuple.
     """
-    _GREASE_CHARS = [" ", "(", ":", "-", ".", "/", ")", ";"]
-    c1 = _GREASE_CHARS[major % 8]
-    c2 = _GREASE_CHARS[(major + 1) % 8]
-    return (f"Not{c1}A{c2}Brand", str(major % 96))
+    _GREASE_CHARS = [" ", "(", ":", "-", ".", "/", ")", ";", "=", "?", "_"]
+    _GREASE_VERSIONS = ["8", "99", "24"]
+    c1 = _GREASE_CHARS[major % len(_GREASE_CHARS)]
+    c2 = _GREASE_CHARS[(major + 1) % len(_GREASE_CHARS)]
+    return (f"Not{c1}A{c2}Brand", _GREASE_VERSIONS[major % len(_GREASE_VERSIONS)])
 
 
 def _compute_brand_order(major: int) -> List[int]:
@@ -1207,20 +1210,17 @@ def pick_random_chrome_version(force_version: Optional[str] = None) -> Tuple[str
     grease_name, grease_ver = _compute_grease_brand(major)
     order = _compute_brand_order(major)
 
-    # Build brands in correct permuted order
-    raw_brands = [
-        {"brand": "Chromium", "version": str(major)},
-        {"brand": "Google Chrome", "version": str(major)},
-        {"brand": grease_name, "version": grease_ver},
-    ]
-    raw_full = [
-        {"brand": "Chromium", "version": chrome_ver},
-        {"brand": "Google Chrome", "version": chrome_ver},
-        {"brand": grease_name, "version": f"{grease_ver}.0.0.0"},
-    ]
-
-    brands = [raw_brands[i] for i in order]
-    full_version_list = [raw_full[i] for i in order]
+    # Chromium's GenerateBrandVersionList() stores GREASE at order[0],
+    # Chromium at order[1], and the browser brand at order[2]. Do not build a
+    # raw list and permute it by index; that changes the meaning of the order.
+    brands = [None, None, None]
+    full_version_list = [None, None, None]
+    brands[order[0]] = {"brand": grease_name, "version": grease_ver}
+    brands[order[1]] = {"brand": "Chromium", "version": str(major)}
+    brands[order[2]] = {"brand": "Google Chrome", "version": str(major)}
+    full_version_list[order[0]] = {"brand": grease_name, "version": f"{grease_ver}.0.0.0"}
+    full_version_list[order[1]] = {"brand": "Chromium", "version": chrome_ver}
+    full_version_list[order[2]] = {"brand": "Google Chrome", "version": chrome_ver}
 
     return chrome_ver, {
         "brands": brands,

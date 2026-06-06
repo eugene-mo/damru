@@ -207,10 +207,13 @@ For optional visual debugging, use the CLI rather than changing the Python API s
 python -m damru devices
 python -m damru screenshot --serial wsl:127.0.0.1:5600 --output screen.png
 python -m damru record --serial wsl:127.0.0.1:5600 --time-limit 30 --output clip.mp4
+python -m damru stealth-open-url --serial wsl:127.0.0.1:5600 --url https://example.com
 python -m damru view --serial wsl:127.0.0.1:5600 --no-control
 ```
 
 These commands use ADB/scrcpy and are intentionally not started by `AsyncDamru`, `Damru`, or pool sessions.
+
+`stealth-open-url` is for CLI/UI manual and debug sessions that still need Damru's full profile setup. The default `--mode cdp` path applies the profile first, disconnects CDP for the actual protected navigation, opens the URL through Android Chrome's native `VIEW` intent, then reconnects CDP so the loaded page can be inspected after load. Use `--mode native` to leave CDP detached after opening. Use `--mode playwright` only when you specifically want raw Playwright `page.goto` behavior for debugging.
 
 For a local browser dashboard, run:
 
@@ -218,7 +221,7 @@ For a local browser dashboard, run:
 python -m damru ui
 ```
 
-The UI is experimental and localhost-only by default. It wraps the same allowlisted CLI/backend actions: setup health, workers, Work Lab URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, browser viewer streaming, native `scrcpy` command copy, and logs. Work Lab URL navigation uses a full Damru stealth session and then leaves Chrome visible, so it applies the same proxy, timezone, locale, UA/client hints, GPU, hardware, WebRTC, and TLS setup that automation sessions use. It is meant for setup/debugging/manual inspection, not as the primary automation API.
+The UI is experimental and localhost-only by default. It wraps the same allowlisted CLI/backend actions: setup health, workers, Work Lab URL navigation, quick checks, screenshots, gallery cleanup, internet repair, random profile actions, browser viewer streaming, native `scrcpy` command copy, and logs. Work Lab URL navigation uses `stealth-open-url` in default detached-navigation/CDP-reattach mode. It is meant for setup/debugging/manual inspection, not as the primary automation API.
 
 ---
 

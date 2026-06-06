@@ -4,6 +4,8 @@ This report records a Damru run against the external stealth benchmark project:
 
 https://github.com/techinz/browsers-benchmark
 
+Credit: the benchmark target definitions, checker structure, and report shape come from `techinz/browsers-benchmark`. Damru's code in this repository only provides a Redroid/Android adapter that plugs Damru into that upstream benchmark harness.
+
 Adapter code used for Damru Redroid runs:
 
 [../scripts/run_browsers_benchmark_damru.py](../scripts/run_browsers_benchmark_damru.py)

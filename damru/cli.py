@@ -2542,7 +2542,11 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
     _repair_runtime_internet(serial, quiet=True)
 
     async def _run_stealth() -> str:
+        from .adb import ADB
         from .async_core import AsyncDamru
+        from .cdp import CDPConnection
+
+        mode = str(getattr(args, "mode", "cdp") or "cdp").lower()
 
         damru = AsyncDamru(
             serial=serial,
@@ -2555,12 +2559,73 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
         context = await damru.__aenter__()
         try:
             page = context.pages[0] if context.pages else await context.new_page()
-            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            await page.wait_for_timeout(max(0, int(getattr(args, "settle_ms", 3000))))
-            title = await page.title()
-            return title
+            if mode in {"native", "cdp"}:
+                # Some protected mobile sites detect active DevTools/CDP
+                # navigation. Apply the profile first, then detach CDP and let
+                # Android Chrome perform a native VIEW intent. In cdp mode we
+                # reconnect after the page settles so automation can inspect it.
+                await page.goto("about:blank", wait_until="domcontentloaded", timeout=15000)
+            elif mode == "playwright":
+                await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                await page.wait_for_timeout(max(0, int(getattr(args, "settle_ms", 3000))))
+                return await page.title()
+            else:
+                raise RuntimeError(f"Unsupported stealth-open-url mode: {mode}")
         finally:
             await damru.__aexit__(None, None, None)
+
+        package = "com.android.chrome"
+        activities = (
+            "com.google.android.apps.chrome.Main",
+            "org.chromium.chrome.browser.ChromeTabbedActivity",
+        )
+        last_error = ""
+        for activity_name in activities:
+            result = _run_adb_text(
+                serial,
+                "shell",
+                "am",
+                "start",
+                "-W",
+                "--activity-clear-top",
+                "-n",
+                f"{package}/{activity_name}",
+                "-a",
+                "android.intent.action.VIEW",
+                "-d",
+                url,
+                timeout=45,
+            )
+            output = "\n".join(part for part in (result.stdout, result.stderr) if part).strip()
+            failed = result.returncode != 0 or "Error:" in output or "Exception" in output
+            if not failed:
+                await asyncio.sleep(max(0, int(getattr(args, "settle_ms", 3000))) / 1000)
+                if mode == "native":
+                    return "native Android Chrome navigation"
+
+                adb = ADB(serial=serial)
+                await adb.ensure_server()
+                cdp = CDPConnection(adb)
+                await cdp.setup_port_forward()
+                try:
+                    context2 = await cdp.connect()
+                    pages = list(context2.pages)
+                    target_page = None
+                    for candidate in pages:
+                        if candidate.url and candidate.url != "about:blank":
+                            target_page = candidate
+                            if url.split("#", 1)[0] in candidate.url:
+                                break
+                    if target_page is None:
+                        target_page = pages[-1] if pages else None
+                    if target_page is None:
+                        return "native navigation; CDP reattached with no pages"
+                    title = await target_page.title()
+                    return title or "native navigation; CDP reattached"
+                finally:
+                    await cdp.disconnect()
+            last_error = output or last_error
+        raise RuntimeError(last_error or "Chrome could not handle native URL navigation")
 
     try:
         import asyncio
@@ -2892,11 +2957,17 @@ def build_parser() -> argparse.ArgumentParser:
     open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     open_url.set_defaults(func=_open_url)
 
-    stealth_open_url = sub.add_parser("stealth-open-url", help="open a URL through a full Damru stealth session and leave Chrome visible")
+    stealth_open_url = sub.add_parser("stealth-open-url", help="open a URL through a full Damru stealth session")
     stealth_open_url.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
     stealth_open_url.add_argument("--url", required=True, help="http:// or https:// URL to open")
     stealth_open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL")
     stealth_open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
+    stealth_open_url.add_argument(
+        "--mode",
+        choices=("cdp", "native", "playwright"),
+        default="cdp",
+        help="cdp detaches for native navigation then reattaches; native leaves CDP detached; playwright uses page.goto",
+    )
     stealth_open_url.add_argument("--settle-ms", type=int, default=3000, help="milliseconds to wait after navigation before leaving Chrome open")
     stealth_open_url.add_argument("--debug", action="store_true", help="enable debug logging")
     stealth_open_url.set_defaults(func=_stealth_open_url)

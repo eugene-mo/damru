@@ -563,6 +563,7 @@ python -m damru benchmark       # run the benchmark command
 python -m damru bake-image      # bake a warm Redroid image
 python -m damru devices         # list ADB devices from Linux/WSL
 python -m damru open-url        # open a URL in Android Chrome on one ADB worker
+python -m damru stealth-open-url # apply Damru stealth, then open a URL with detached/CDP-safe navigation
 python -m damru quick-check     # run a fast local Android/Chrome sanity check
 python -m damru screenshot      # capture Android display PNG through ADB
 python -m damru record          # capture Android display MP4 through ADB
@@ -598,6 +599,8 @@ printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-pass
 ```
 
 For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
+
+Use `stealth-open-url` when you want CLI/UI URL opening with Damru's full profile setup. The default `--mode cdp` path applies the selected profile, proxy, timezone, locale, WebRTC policy, TLS setup, and Chrome state, disconnects CDP for the protected navigation, opens the target URL through Android's native Chrome `VIEW` intent, then reconnects CDP so the page can still be inspected or automated after load. Use `--mode native` when you want to leave CDP detached after opening. Use `--mode playwright` only when you specifically want the raw Playwright `page.goto` path for debugging.
 
 ### Experimental Local UI
 
@@ -911,6 +914,7 @@ Damru is built on the shoulders of giants. We would like to credit the following
 *   **[Magisk](https://github.com/topjohnwu/Magisk)**: For the inspiration behind the `resetprop` logic used in our system property spoofing.
 *   **[curl_cffi](https://github.com/yifeikong/curl_cffi)**: For providing the TLS impersonation capabilities used in our edge-layer bypasses.
 *   **[Docker](https://www.docker.com/)**: For the containerization infrastructure that enables scalable automation pools.
+*   **[techinz/browsers-benchmark](https://github.com/techinz/browsers-benchmark)**: For the external browser stealth benchmark target definitions and result structure used by Damru's benchmark adapter and sanitized proof report. Damru keeps its adapter in [scripts/run_browsers_benchmark_damru.py](scripts/run_browsers_benchmark_damru.py) and credits the upstream benchmark project when publishing those results.
 
 ---
 

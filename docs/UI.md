@@ -91,7 +91,7 @@ Work Lab is the manual browser and viewer workspace. It is useful for debugging 
 Browser actions:
 
 - select an ADB serial
-- open a URL through Damru's full stealth session path
+- open a URL through Damru's `stealth-open-url` path: apply stealth, detach CDP for the first navigation, open with Android Chrome, then reattach CDP for inspection
 - optionally provide `socks5://user:pass@host:port`, `http://user:pass@host:port`, or `host:port` proxy format
 - fix internet for the selected worker
 - apply a random profile to the selected worker
