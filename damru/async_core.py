@@ -185,8 +185,18 @@ class AsyncDamru:
         logger.info("Root access confirmed")
         logger.info("Native GPU: %s", native_gpu or "unknown")
 
-        # Step 3: Pick target device + build profile (CPU-only, instant)
-        real_android = info.get("android_version", "")
+        # Step 3: Pick target device + build profile (CPU-only, instant).
+        # Prefer non-spoofed partition release for compatibility decisions;
+        # ro.build.version.release may have been changed by a prior profile.
+        real_android = (
+            await self._adb.shell(
+                "v=$(getprop ro.system.build.version.release); "
+                "if [ -n \"$v\" ]; then echo \"$v\"; "
+                "else getprop ro.build.version.release; fi",
+                timeout=5,
+                allow_failure=True,
+            )
+        ).strip() or info.get("android_version", "")
         if self._device_name and self._device_name != "random":
             target_device = get_device(self._device_name)
         else:
@@ -258,13 +268,16 @@ class AsyncDamru:
         # |  on each other. Running them concurrently saves ~5-8s.     |
         # #==============================================================#
 
-        # Check real (non-spoofed) SDK from build.prop to guard against a previous
-        # session's resetprop having left ro.build.version.release/sdk at a higher
-        # value than the actual framework. If the real SDK < target SDK, setting
-        # ro.build.version.sdk to the target value will make Chrome call Android APIs
-        # that don't exist in the framework -> FATAL EXCEPTION (NoSuchMethodError).
+        # Check the real framework SDK from non-spoofed partition properties.
+        # `ro.build.version.*` is mutable through resetprop and may already be
+        # spoofed by a prior force-profile action. Redroid/modern Android expose
+        # the immutable runtime through `ro.system.build.version.*`; fall back to
+        # /system/build.prop only for older layouts.
         real_sdk_raw = await self._adb.shell(
-            "su -c \"grep '^ro.build.version.sdk=' /system/build.prop 2>/dev/null\" | cut -d= -f2",
+            "v=$(getprop ro.system.build.version.sdk); "
+            "if [ -n \"$v\" ]; then echo \"$v\"; "
+            "else grep -E '^(ro.system.build.version.sdk|ro.build.version.sdk)=' /system/build.prop 2>/dev/null | "
+            "tail -n1 | cut -d= -f2; fi",
             allow_failure=True,
         )
         real_sdk = int(real_sdk_raw.strip()) if real_sdk_raw.strip().isdigit() else 0
