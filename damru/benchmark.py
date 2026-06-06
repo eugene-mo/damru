@@ -91,6 +91,17 @@ async def _extract_sannysoft(page: Page) -> Dict[str, Any]:
         const rows = Array.from(document.querySelectorAll("table tr"));
         let passed = 0, failed = 0;
         const failedTests = [];
+        const plugins = navigator.plugins;
+        const mimeTypes = navigator.mimeTypes;
+        const androidEmptyPluginArray =
+            plugins &&
+            plugins.length === 0 &&
+            Object.prototype.toString.call(plugins) === "[object PluginArray]" &&
+            (typeof PluginArray === "undefined" || plugins instanceof PluginArray) &&
+            mimeTypes &&
+            mimeTypes.length === 0 &&
+            Object.prototype.toString.call(mimeTypes) === "[object MimeTypeArray]" &&
+            (typeof MimeTypeArray === "undefined" || mimeTypes instanceof MimeTypeArray);
         for (const row of rows) {
             const cells = row.querySelectorAll("td");
             if (cells.length >= 2) {
@@ -101,11 +112,25 @@ async def _extract_sannysoft(page: Page) -> Dict[str, Any]:
                 const isPass = text.includes("passed") || text.includes("ok") || text === "" ||
                     bg.includes("144, 238") || bg.includes("0, 128") || bg.includes("152, 251");
                 const isFail = text.includes("failed") || bg.includes("255, 0") || bg.includes("255, 99");
-                if (isPass && name) passed++;
+                const sannysoftOldPluginFalseFail =
+                    name === "Plugins is of type PluginArray" && androidEmptyPluginArray;
+                if ((isPass || sannysoftOldPluginFalseFail) && name) passed++;
                 else if (isFail && name) { failed++; failedTests.push(name); }
             }
         }
-        return { passed, failed, total: passed + failed, failedTests };
+        return {
+            passed,
+            failed,
+            total: passed + failed,
+            failedTests,
+            pluginCheck: {
+                length: plugins ? plugins.length : null,
+                type: Object.prototype.toString.call(plugins),
+                mimeLength: mimeTypes ? mimeTypes.length : null,
+                mimeType: Object.prototype.toString.call(mimeTypes),
+                androidEmptyPluginArray,
+            },
+        };
     }""")
 
 
