@@ -610,7 +610,7 @@ printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-pass
 
 For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
 
-Use `stealth-open-url` when you want CLI/UI URL opening with Damru's full profile setup. The default `--mode cdp` path applies the selected profile, proxy, timezone, locale, WebRTC policy, TLS setup, and Chrome state, disconnects CDP for the protected navigation, opens the target URL through Android's native Chrome `VIEW` intent, then reconnects CDP so the page can still be inspected or automated after load. Use `--mode native` when you want to leave CDP detached after opening. Use `--mode playwright` only when you specifically want the raw Playwright `page.goto` path for debugging.
+Use `stealth-open-url` when you want CLI/UI URL opening with Damru's full profile setup. The default `--mode cdp` path applies or reuses the selected profile, proxy, timezone, locale, WebRTC policy, TLS setup, and Chrome state, disconnects CDP for the protected navigation, opens the target URL through Android's native Chrome `VIEW` intent, then reconnects CDP so the page can still be inspected or automated after load. It reuses existing Chrome/profile state by default for fast repeated opens; pass `--cold-start` when you need a fresh Chrome identity. Use `--mode native` when you want to leave CDP detached after opening. Use `--mode playwright` only when you specifically want the raw Playwright `page.goto` path for debugging.
 
 ### Experimental Local UI
 

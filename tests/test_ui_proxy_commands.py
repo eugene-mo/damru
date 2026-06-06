@@ -39,6 +39,24 @@ def test_com_br_url_hints_pt_br_locale():
     assert cli._locale_hint_for_url("https://www.example.com.br/") == "pt-BR"
     assert cli._locale_hint_for_url("https://www.example.com/") is None
 
+def test_stealth_open_url_reuses_profile_by_default():
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["stealth-open-url", "--url", "https://example.com"])
+    assert args.cold_start is False
+
+    args = parser.parse_args(["stealth-open-url", "--url", "https://example.com", "--cold-start"])
+    assert args.cold_start is True
+
+    args = parser.parse_args([
+        "stealth-open-url",
+        "--url",
+        "https://example.com",
+        "--cold-start",
+        "--reuse-profile",
+    ])
+    assert args.cold_start is False
+
 
 def test_apply_android_proxy_writes_no_auth_host_port(monkeypatch):
     calls = []

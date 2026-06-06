@@ -2605,7 +2605,7 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
             http_proxy=getattr(args, "http_proxy", None),
             locale=getattr(args, "locale", None) or _locale_hint_for_url(url),
             keep_chrome_on_exit=True,
-            force_cold_start=True,
+            force_cold_start=bool(getattr(args, "cold_start", False)),
             debug=getattr(args, "debug", False),
         )
         context = await damru.__aenter__()
@@ -3035,6 +3035,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="cdp detaches for native navigation then reattaches; native leaves CDP detached; playwright uses page.goto",
     )
     stealth_open_url.add_argument("--locale", default=None, help="explicit BCP-47 locale; .com.br URLs default to pt-BR when omitted")
+    stealth_open_url.add_argument("--reuse-profile", dest="cold_start", action="store_false", help="reuse existing Chrome/profile state; default")
+    stealth_open_url.add_argument("--cold-start", dest="cold_start", action="store_true", help="clear Chrome and rebuild profile before opening")
+    stealth_open_url.set_defaults(cold_start=False)
     stealth_open_url.add_argument("--settle-ms", type=int, default=3000, help="milliseconds to wait after navigation before leaving Chrome open")
     stealth_open_url.add_argument("--debug", action="store_true", help="enable debug logging")
     stealth_open_url.set_defaults(func=_stealth_open_url)

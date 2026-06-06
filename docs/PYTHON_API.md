@@ -234,7 +234,7 @@ python -m damru view --serial wsl:127.0.0.1:5600 --no-control
 
 These commands use ADB/scrcpy and are intentionally not started by `AsyncDamru`, `Damru`, or pool sessions.
 
-`stealth-open-url` is for CLI/UI manual and debug sessions that still need Damru's full profile setup. The default `--mode cdp` path applies the profile first, disconnects CDP for the actual protected navigation, opens the URL through Android Chrome's native `VIEW` intent, then reconnects CDP so the loaded page can be inspected after load. Use `--mode native` to leave CDP detached after opening. Use `--mode playwright` only when you specifically want raw Playwright `page.goto` behavior for debugging.
+`stealth-open-url` is for CLI/UI manual and debug sessions that still need Damru's full profile setup. The default `--mode cdp` path applies or reuses the profile, disconnects CDP for the actual protected navigation, opens the URL through Android Chrome's native `VIEW` intent, then reconnects CDP so the loaded page can be inspected after load. It reuses existing Chrome/profile state by default for fast repeated opens; pass `--cold-start` when you need to clear Chrome and rebuild a fresh identity. Use `--mode native` to leave CDP detached after opening. Use `--mode playwright` only when you specifically want raw Playwright `page.goto` behavior for debugging.
 
 For a local browser dashboard, run:
 
