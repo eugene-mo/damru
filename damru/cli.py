@@ -2189,7 +2189,13 @@ def _random_profile(args: argparse.Namespace) -> int:
             return 1
         ok = True
         for serial in serials:
-            code = _random_profile(argparse.Namespace(serial=serial, all=False, proxy=getattr(args, "proxy", None), http_proxy=getattr(args, "http_proxy", None)))
+            code = _random_profile(argparse.Namespace(
+                serial=serial,
+                all=False,
+                profile_tier=getattr(args, "profile_tier", "premium"),
+                proxy=getattr(args, "proxy", None),
+                http_proxy=getattr(args, "http_proxy", None),
+            ))
             ok = ok and code == 0
         return 0 if ok else 1
     serial = _resolve_serial(args.serial)
@@ -2209,7 +2215,10 @@ def _random_profile(args: argparse.Namespace) -> int:
 
         adb = ADB(serial)
         real_android = await adb.get_prop("ro.build.version.release")
-        device = get_random_device(android_version=real_android.strip() or None)
+        device = get_random_device(
+            android_version=real_android.strip() or None,
+            profile_tier=getattr(args, "profile_tier", "premium"),
+        )
         explicit_proxy = getattr(args, "proxy", None)
         explicit_http_proxy = getattr(args, "http_proxy", None)
         current_http_proxy = explicit_http_proxy
@@ -2982,6 +2991,11 @@ def build_parser() -> argparse.ArgumentParser:
     random_profile = sub.add_parser("random-profile", help="apply a random stealth profile to an ADB worker")
     random_profile.add_argument("--serial", "-s", default=None, help="ADB serial; defaults to the first online device")
     random_profile.add_argument("--all", action="store_true", help="apply random profiles to all running Damru workers")
+    random_profile.add_argument(
+        "--profile-tier",
+        default="premium",
+        help="random pool: premium (default), premium_verified, premium_new, medium, experimental, extended, or all",
+    )
     random_profile.add_argument("--proxy", default=None, help="proxy URL used for geo/timezone/locale and Android HTTP proxy")
     random_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     random_profile.set_defaults(func=_random_profile)

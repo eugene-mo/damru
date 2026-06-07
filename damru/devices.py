@@ -179,6 +179,21 @@ class AndroidDevice:
             return "powervr"
         return "unknown"
 
+    @property
+    def profile_tier(self) -> str:
+        """Validation tier used by the default random profile pool.
+
+        ``premium_verified`` and ``premium_new`` are used by default. Medium
+        and experimental profiles stay available by explicit name or opt-in
+        tier, but are not selected by random sessions unless requested.
+        """
+        return _DEVICE_TIER_BY_NAME.get(self.name, "premium_verified")
+
+    @property
+    def is_premium(self) -> bool:
+        """True when this profile is in the default random selection pool."""
+        return self.profile_tier in {"premium_verified", "premium_new"}
+
     def system_props(self, safe_only: bool = True) -> Dict[str, str]:
         """Return dict of Android system properties to set via resetprop.
 
@@ -2482,6 +2497,28 @@ DEVICES: List[AndroidDevice] = [
     ),
 ]
 
+# Profile validation tiers. The first 51 profiles are the original verified
+# core set. The imported expansion is ordered by source confidence comments:
+# 49 high-confidence profiles, 38 medium-confidence profiles, then 17 lower
+# confidence profiles. Only premium tiers are used by default random selection.
+_PREMIUM_VERIFIED_COUNT = 51
+_PREMIUM_NEW_COUNT = 49
+_MEDIUM_CONFIDENCE_COUNT = 38
+
+_DEVICE_TIER_BY_NAME: Dict[str, str] = {}
+for _idx, _device in enumerate(DEVICES):
+    if _idx < _PREMIUM_VERIFIED_COUNT:
+        _tier = "premium_verified"
+    elif _idx < _PREMIUM_VERIFIED_COUNT + _PREMIUM_NEW_COUNT:
+        _tier = "premium_new"
+    elif _idx < _PREMIUM_VERIFIED_COUNT + _PREMIUM_NEW_COUNT + _MEDIUM_CONFIDENCE_COUNT:
+        _tier = "medium"
+    else:
+        _tier = "experimental"
+    _DEVICE_TIER_BY_NAME[_device.name] = _tier
+
+_PREMIUM_TIERS = {"premium_verified", "premium_new"}
+
 # Build lookup index by name/model
 _DEVICE_INDEX: Dict[str, AndroidDevice] = {}
 for _d in DEVICES:
@@ -2525,15 +2562,20 @@ def get_device(name: str) -> AndroidDevice:
 def get_random_device(
     android_version: Optional[str] = None,
     gpu_family: Optional[str] = None,
+    profile_tier: Optional[str] = "premium",
 ) -> AndroidDevice:
-    """Return a random device, filtered by Android version and GPU family.
+    """Return a random device, filtered by Android version, GPU, and tier.
 
     Args:
         android_version: Filter to devices matching this Android version.
         gpu_family: Filter by GPU family ('adreno', 'mali', 'xclipse', 'powervr').
             On MuMu (Adreno emulator), pass 'adreno' to avoid GPU mismatch.
+        profile_tier: Selection tier. Defaults to ``premium`` which includes
+            ``premium_verified`` and ``premium_new`` only. Use ``all`` to opt
+            into every profile, or one of ``medium`` / ``experimental`` for
+            lower-confidence pools.
     """
-    pool = DEVICES
+    pool = get_devices_by_tier(profile_tier or "premium")
     if android_version:
         filtered = [d for d in pool if d.android_version == android_version]
         if filtered:
@@ -2545,9 +2587,46 @@ def get_random_device(
         else:
             # If no matches with both filters, relax android_version
             pool = [d for d in DEVICES if d.gpu_family == gpu_family]
+            pool = [d for d in pool if _device_matches_tier(d, profile_tier or "premium")]
             if not pool:
-                pool = DEVICES  # ultimate fallback
+                pool = get_devices_by_tier(profile_tier or "premium")
     return random.choice(pool)
+
+
+def _normalize_profile_tier(profile_tier: Optional[str]) -> str:
+    return (profile_tier or "premium").strip().lower().replace("-", "_")
+
+
+def _device_matches_tier(device: AndroidDevice, profile_tier: Optional[str]) -> bool:
+    tier = _normalize_profile_tier(profile_tier)
+    if tier in {"all", "any"}:
+        return True
+    if tier in {"premium", "default"}:
+        return device.profile_tier in _PREMIUM_TIERS
+    if tier in {"premium_verified", "verified", "old"}:
+        return device.profile_tier == "premium_verified"
+    if tier in {"premium_new", "new", "high"}:
+        return device.profile_tier == "premium_new"
+    if tier in {"medium", "medium_confidence"}:
+        return device.profile_tier == "medium"
+    if tier in {"experimental", "low", "low_confidence"}:
+        return device.profile_tier == "experimental"
+    if tier in {"extended", "nonpremium", "non_premium"}:
+        return device.profile_tier not in _PREMIUM_TIERS
+    raise ValueError(
+        "Unknown profile tier '%s'. Use premium, premium_verified, "
+        "premium_new, medium, experimental, extended, or all." % profile_tier
+    )
+
+
+def get_devices_by_tier(profile_tier: Optional[str] = "premium") -> List[AndroidDevice]:
+    """Return devices in a profile tier.
+
+    ``premium`` is the default production pool. ``medium`` and
+    ``experimental`` are opt-in diversity pools. ``all`` includes every built-in
+    profile. Explicit ``get_device(...)`` lookup is never tier-restricted.
+    """
+    return [d for d in DEVICES if _device_matches_tier(d, profile_tier)]
 
 
 def pick_screen_variant(device: AndroidDevice) -> Tuple[int, int, int]:

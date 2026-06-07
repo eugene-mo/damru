@@ -17,6 +17,7 @@ __all__ = [
     "DamruError",
     "AndroidDevice",
     "get_device",
+    "get_devices_by_tier",
     "get_random_device",
     "list_device_names",
     "force_device_profile",
@@ -68,7 +69,7 @@ def _load_exports() -> None:
 
     from .async_core import AsyncDamru, DamruError
     from .core import Damru
-    from .devices import AndroidDevice, get_device, get_random_device, list_device_names
+    from .devices import AndroidDevice, get_device, get_devices_by_tier, get_random_device, list_device_names
     from .pool import DamruPool, DamruPoolSync
     from .profile_apply import AppliedDeviceProfile, force_device_profile
 
@@ -81,6 +82,7 @@ def _load_exports() -> None:
             "DamruError": DamruError,
             "AndroidDevice": AndroidDevice,
             "get_device": get_device,
+            "get_devices_by_tier": get_devices_by_tier,
             "get_random_device": get_random_device,
             "list_device_names": list_device_names,
             "force_device_profile": force_device_profile,

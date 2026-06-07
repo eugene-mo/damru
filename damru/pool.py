@@ -86,6 +86,7 @@ class DamruPool:
         http_proxy=_UNSET,
         http_proxies=_UNSET,
         device=_UNSET,
+        profile_tier=_UNSET,
         timezone=_UNSET,
         locale=_UNSET,
         chrome_apk=_UNSET,
@@ -105,6 +106,11 @@ class DamruPool:
         self._http_proxy = http_proxy if http_proxy is not _UNSET else config.HTTP_PROXY
         self._http_proxies = http_proxies if http_proxies is not _UNSET else config.HTTP_PROXIES
         self._device = device if device is not _UNSET else config.DEVICE
+        self._profile_tier = (
+            profile_tier
+            if profile_tier is not _UNSET
+            else getattr(config, "PROFILE_TIER", "premium")
+        )
         self._timezone = timezone if timezone is not _UNSET else config.TIMEZONE
         self._locale = locale if locale is not _UNSET else config.LOCALE
         self._chrome_apk = chrome_apk if chrome_apk is not _UNSET else config.CHROME_APK
@@ -428,6 +434,7 @@ class DamruPool:
     async def session(
         self,
         device: Optional[str] = None,
+        profile_tier: Optional[str] = None,
         proxy: Optional[str] = None,
         task_timeout: Optional[float] = _UNSET,
     ):
@@ -456,6 +463,7 @@ class DamruPool:
                         serial=slot.serial,
                         proxy=proxy_url,
                         http_proxy=http_proxy_url,
+                        profile_tier=profile_tier or self._profile_tier,
                         timezone=self._timezone,
                         locale=self._locale,
                         debug=self._debug,
@@ -855,6 +863,7 @@ class DamruPoolSync:
     def session(
         self,
         device: Optional[str] = None,
+        profile_tier: Optional[str] = None,
         proxy: Optional[str] = None,
         task_timeout: Optional[float] = _UNSET,
     ):
@@ -894,6 +903,7 @@ class DamruPoolSync:
                         serial=slot.serial,
                         proxy=proxy_url,
                         http_proxy=http_proxy_url,
+                        profile_tier=profile_tier or self._pool._profile_tier,
                         timezone=self._pool._timezone,
                         locale=self._pool._locale,
                         debug=self._pool._debug,
@@ -1086,4 +1096,3 @@ class DamruPoolSync:
     def stats(self) -> Dict[str, int]:
         """Pool health and usage statistics (thread-safe read)."""
         return self._pool.stats
-

@@ -76,6 +76,7 @@ class AsyncDamru:
         timezone: Optional[str] = None,
         locale: Optional[str] = None,
         chrome_package: Optional[str] = None,
+        profile_tier: Optional[str] = None,
         restore_props: bool = True,
         keep_chrome_on_exit: bool = False,
         force_cold_start: bool = False,
@@ -88,6 +89,13 @@ class AsyncDamru:
         self._timezone = timezone
         self._locale = locale
         self._chrome_package = chrome_package
+        if profile_tier is None:
+            try:
+                from .config import PROFILE_TIER
+            except Exception:
+                PROFILE_TIER = "premium"
+            profile_tier = PROFILE_TIER
+        self._profile_tier = profile_tier
         self._restore_props = restore_props
         self._keep_chrome_on_exit = keep_chrome_on_exit
         self._force_cold_start = force_cold_start
@@ -200,7 +208,10 @@ class AsyncDamru:
         if self._device_name and self._device_name != "random":
             target_device = get_device(self._device_name)
         else:
-            target_device = get_random_device(android_version=real_android.strip() or None)
+            target_device = get_random_device(
+                android_version=real_android.strip() or None,
+                profile_tier=self._profile_tier,
+            )
         logger.info("Target device: %s (Android %s, %s, %s)",
                      target_device.name, target_device.android_version,
                      target_device.chipset, target_device.webgl_renderer)

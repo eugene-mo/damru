@@ -1,4 +1,4 @@
-from damru.devices import get_device, pick_random_android_version
+from damru.devices import get_device, get_devices_by_tier, get_random_device, pick_random_android_version
 from damru.root import _detect_gpu_family
 
 
@@ -71,3 +71,24 @@ def test_redmi_9a_profile_from_adb_device() -> None:
     assert props["ro.build.version.release"] == "11"
     assert props["ro.build.version.sdk"] == "30"
     assert props["ro.build.version.security_patch"] == "2022-07-01"
+
+
+def test_profile_tiers_default_random_is_premium_only() -> None:
+    assert len(get_devices_by_tier("premium")) == 100
+    assert len(get_devices_by_tier("premium_verified")) == 51
+    assert len(get_devices_by_tier("premium_new")) == 49
+    assert len(get_devices_by_tier("medium")) == 38
+    assert len(get_devices_by_tier("experimental")) == 17
+    assert len(get_devices_by_tier("all")) == 155
+
+    picked = {get_random_device().profile_tier for _ in range(300)}
+    assert picked <= {"premium_verified", "premium_new"}
+    assert picked == {"premium_verified", "premium_new"}
+
+
+def test_explicit_profiles_ignore_default_tier_filter() -> None:
+    device = get_device("Nokia C32")
+    assert device.profile_tier == "experimental"
+
+    picked = {get_random_device(profile_tier="all").profile_tier for _ in range(1000)}
+    assert {"premium_verified", "premium_new", "medium", "experimental"} <= picked

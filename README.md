@@ -75,7 +75,7 @@ Damru's most advanced stealth layers - including native GPU binary patching and 
 ## Core Features
 
 *   **Zero JS Injection**: All spoofing is executed at the OS, Binary, and CDP levels. No brittle `Object.defineProperty` hacks.
-*   **Massive Device Database**: Built-in profiles for 155 real Android devices (Samsung, Pixel, Xiaomi, Redmi, POCO, OnePlus, OPPO, Realme, Vivo, iQOO, Motorola, Honor, Sony, Nokia/HMD, ASUS, Tecno, Infinix, ZTE/Nubia, etc.) with realistic hardware specifications.
+*   **Massive Device Database**: Built-in profiles for 155 real Android devices (Samsung, Pixel, Xiaomi, Redmi, POCO, OnePlus, OPPO, Realme, Vivo, iQOO, Motorola, Honor, Sony, Nokia/HMD, ASUS, Tecno, Infinix, ZTE/Nubia, etc.) with realistic hardware specifications. Default random selection uses premium profiles only; medium and experimental profiles are opt-in.
 *    **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
 *    **Browser Version & Client Hints Randomization**: Dynamically selects from the validated Chrome APK bundle, rotates compatible Chrome builds with random profiles, and generates matching `sec-ch-ua` Client Hints including Chromium GREASE brand permutations.
 *    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
@@ -219,6 +219,8 @@ For detailed information on how to use the Damru library programmatically, inclu
 For the full list of available Android identities, see the:
 
 **[Damru Device Profile Reference](docs/DEVICE_PROFILES.md)**
+
+Default `device="random"` and UI random-profile actions use the premium pool: 51 original verified profiles plus 49 high-confidence new profiles. Use an explicit `device=...` or `--profile-tier medium|experimental|all` only when you intentionally want wider lower-confidence diversity.
 
 ### Quick Summary:
 *   **`AsyncDamru`**: The primary entry point for asynchronous automation.

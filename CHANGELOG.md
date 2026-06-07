@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added profile tiers: default random selection now uses only the 100-profile premium pool (51 original verified + 49 high-confidence new profiles), while medium and experimental profiles remain available by explicit name or opt-in `profile_tier` / `--profile-tier`.
 - Expanded the built-in Android profile database from 51 to 155 profiles by importing 104 additional regional devices from the `r.txt` research set. Malformed entries, existing duplicate devices, `UNKNOWN` fingerprints, obvious placeholder fingerprints, and incomplete critical records were skipped; all imported profiles passed Sannysoft on WSL Redroid with a runtime-only DataImpulse proxy after retrying transient proxy/network timeouts, and representative Adreno/Mali/PowerVR profiles passed the full CreepJS, BrowserScan, Sannysoft, and Cloudflare benchmark sample.
 - Rebuilt the baked Redroid image from the clean Redroid base instead of stacking on an older `damru-redroid:latest`; the current export is about 943 MB and includes the validated Chrome/WebView/TTS/resetprop assets.
 - Fixed `quick-check` DNS readiness so it accepts Android DNS from the active resolver state instead of requiring only `net.dns1`, which prevented false DNS failures on freshly imported images.

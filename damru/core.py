@@ -43,6 +43,7 @@ class Damru:
         timezone: Optional[str] = None,
         locale: Optional[str] = None,
         chrome_package: Optional[str] = None,
+        profile_tier: Optional[str] = None,
         restore_props: bool = True,
         debug: bool = False,
     ):
@@ -53,6 +54,7 @@ class Damru:
             timezone=timezone,
             locale=locale,
             chrome_package=chrome_package,
+            profile_tier=profile_tier,
             restore_props=restore_props,
             debug=debug,
         )

@@ -42,6 +42,7 @@ Damru expects Redroid to run inside Ubuntu Linux or Ubuntu WSL2. On Windows, Doc
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `device` | `str` | `"random"` | Target device string (e.g., `"samsung_galaxy_s24_ultra"`). |
+| `profile_tier` | `str` | config `PROFILE_TIER` / `"premium"` | Random profile pool when `device` is unset or `"random"`: `premium`, `premium_verified`, `premium_new`, `medium`, `experimental`, `extended`, or `all`. Explicit named devices ignore this filter. |
 | `serial` | `str` | `None` | ADB identifier. If `None`, Damru auto-detects virtual devices only: TCP Redroid endpoints first, then `emulator-*`. Physical-looking USB serials are refused by default. |
 | `proxy` | `str` | `None` | Browser proxy URL used for GeoIP and Python-side proxy checks. SOCKS5 and HTTP URLs are accepted. |
 | `http_proxy` | `str` | `None` | Android system HTTP proxy as `host:port` or `http://user:pass@host:port`. Use this when Android Chrome must route through an HTTP CONNECT proxy or local bridge. |
@@ -123,6 +124,7 @@ async with DamruPool(mode="auto", max_devices=10) as pool:
 | `proxies` | `list[str]` | config `PROXIES` | Per-worker proxy list. Pool rotates through these by slot index. |
 | `http_proxy` / `http_proxies` | `str` / `list[str]` | config values | Android system HTTP proxy override when it differs from the browser proxy. GeoIP is resolved through this path when present. |
 | `device` | `str` | config `DEVICE` | Fixed device profile, or `None`/`"random"` for per-session random profiles. |
+| `profile_tier` | `str` | config `PROFILE_TIER` / `"premium"` | Random pool for sessions without a fixed `device`; medium/experimental/all are opt-in. |
 | `timezone` / `locale` | `str` | config values | Force timezone and locale instead of deriving them from proxy/profile data. |
 | `chrome_apk` | `str` | config `CHROME_APK` | Chrome APK file or split-APK directory for raw/unbaked auto mode. Leave unset to auto-search the validated APK bundle and allow Chrome rotation during random profile actions. |
 | `wsl_distro` | `str` | config `WSL_DISTRO` | Windows only: WSL distro that owns Docker/Redroid. |
@@ -146,10 +148,10 @@ with DamruPoolSync(mode="auto", max_devices=5, proxies=["socks5://..."]) as pool
 ## Device Management
 
 ### `AndroidDevice` Database
-Access the physical specifications of the 155 built-in device profiles. The full generated list is in [DEVICE_PROFILES.md](DEVICE_PROFILES.md). Profiles can be selected by exact marketing name, model, or slug; `device="random"` still rotates from the same validated pool.
+Access the physical specifications of the 155 built-in device profiles. The full generated list is in [DEVICE_PROFILES.md](DEVICE_PROFILES.md). Profiles can be selected by exact marketing name, model, or slug. Default random selection uses the premium pool only: 51 original verified profiles plus 49 high-confidence new profiles. Medium and experimental profiles remain available by explicit name or opt-in tier.
 
 ```python
-from damru import list_device_names, get_device, get_random_device
+from damru import list_device_names, get_device, get_devices_by_tier, get_random_device
 
 # Get hardware specs for a specific phone
 pixel = get_device("pixel_8_pro")
@@ -157,7 +159,13 @@ print(f"Cores: {pixel.hardware_concurrency}, RAM: {pixel.device_memory}GB")
 
 # Select a random Android 13 profile
 random_phone = get_random_device(android_version="13")
+
+# Opt into wider lower-confidence pools only when you want extra diversity
+all_profiles = get_devices_by_tier("all")
+medium_phone = get_random_device(profile_tier="medium")
 ```
+
+Random tier names are `premium` (default), `premium_verified`, `premium_new`, `medium`, `experimental`, `extended`, and `all`. Explicit `device="Nokia C32"` or `get_device("Nokia C32")` is never blocked by the default premium filter.
 
 To force a specific profile onto an already-running rooted worker without opening a full Damru Playwright session, use the CLI or the async helper:
 

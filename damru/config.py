@@ -15,6 +15,9 @@ MODE = "auto"
 NUM_DEVICES = 1
 # Fixed device name (e.g. "galaxy_s24_ultra"), or None = random per session
 DEVICE = None
+# Random profile pool: premium (default), premium_verified, premium_new,
+# medium, experimental, extended, or all. Explicit DEVICE always works.
+PROFILE_TIER = os.environ.get("DAMRU_PROFILE_TIER", "premium")
 
 # Proxy Configuration
 # Single proxy shared by all workers (set one or the other, not both)

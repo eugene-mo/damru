@@ -21,9 +21,14 @@ python -m damru force-profile --serial 127.0.0.1:5600 --device "Moto G (5S) Plus
 
 GPU families matter most for emulator compatibility. MuMu is Adreno-oriented; Redroid is the supported path for full automation.
 
-The latest expansion added 104 regional Android profiles from the `r.txt` research set. Malformed entries, `UNKNOWN` fingerprints, obvious placeholder fingerprints, duplicate existing devices, and records with incomplete critical fields were not added. The imported set was validated on WSL Redroid with a runtime-only DataImpulse proxy: Sannysoft passed on all 104 profiles after retrying transient proxy/network timeouts, and a representative CreepJS/BrowserScan/Sannysoft/Cloudflare sample passed across Adreno, Mali, and PowerVR profiles.
+The latest expansion added 104 regional Android profiles from the `r.txt` research set. Malformed entries, `UNKNOWN` fingerprints, obvious placeholder fingerprints, duplicate existing devices, and records with incomplete critical fields were not added. The imported set was validated on WSL Redroid with a runtime-only residential proxy: Sannysoft passed on all 104 profiles after retrying transient proxy/network timeouts, and a representative CreepJS/BrowserScan/Sannysoft/Cloudflare sample passed across Adreno, Mali, and PowerVR profiles.
+
+Random profile selection is tiered. `device="random"`, `get_random_device()`, `DamruPool()`, and UI random-profile actions use `premium` by default: 51 original verified profiles plus 49 high-confidence imported profiles. Medium-confidence and experimental profiles remain available by exact name/model/slug, or by opting in with `profile_tier="medium"`, `profile_tier="experimental"`, or `profile_tier="all"`.
 
 Total profiles: 155
+Default premium random pool: 100
+Opt-in medium pool: 38
+Opt-in experimental pool: 17
 
 | # | Profile | Slug | Model | Android | SDK | GPU family | GPU renderer | Chipset | Screen | RAM | Cores | Screen variants |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
