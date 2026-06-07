@@ -9,6 +9,7 @@ Environment:
   DAMRU_REPO           Optional path to the Damru repo.
   DAMRU_BENCH_PROXY    Optional HTTP/SOCKS proxy URL. Do not commit it.
   DAMRU_BENCH_DEVICE   Optional Damru device profile, e.g. Samsung Galaxy S23.
+  DAMRU_BENCH_SERIAL   Optional explicit Redroid ADB serial, e.g. wsl:127.0.0.1:5600.
   DAMRU_BENCH_ONLY     Optional comma-separated target names.
   DAMRU_BENCH_SKIP     Optional comma-separated target names.
   DAMRU_BENCH_OUT      Optional output directory.
@@ -42,6 +43,7 @@ class DamruBenchmarkEngine(BrowserEngine):
         super().__init__(name="damru-redroid", proxy=None)
         self.proxy_url = proxy_url
         self.device = os.environ.get("DAMRU_BENCH_DEVICE") or None
+        self.serial = os.environ.get("DAMRU_BENCH_SERIAL") or None
         self.pool = None
         self.session_cm = None
         self.context = None
@@ -54,12 +56,23 @@ class DamruBenchmarkEngine(BrowserEngine):
 
     async def start(self):
         self._start_time = time.time()
-        self.pool = DamruPool(mode="auto", max_devices=1, proxy=self.proxy_url, debug=False)
-        await self.pool.__aenter__()
+        if not self.serial:
+            self.pool = DamruPool(mode="auto", max_devices=1, proxy=self.proxy_url, debug=False)
+            await self.pool.__aenter__()
         await self.start_session()
 
     async def start_session(self):
-        self.session_cm = self.pool.session(device=self.device, proxy=self.proxy_url, task_timeout=None)
+        if self.serial:
+            from damru.async_core import AsyncDamru
+
+            self.session_cm = AsyncDamru(
+                device=self.device,
+                serial=self.serial,
+                proxy=self.proxy_url,
+                keep_chrome_on_exit=True,
+            )
+        else:
+            self.session_cm = self.pool.session(device=self.device, proxy=self.proxy_url, task_timeout=None)
         self.context = await self.session_cm.__aenter__()
         self.page = await self.context.new_page()
         self.page.set_default_timeout(30000)
@@ -176,6 +189,19 @@ async def main():
                     if target.name == "google_search" and not item["bypass"]:
                         html = (await engine.get_page_content()).lower()
                         item["bypass"] = "what is my user agent" in html and "sorry/index" not in engine.page.url.lower()
+                    elif target.name == "datadome_protected_2" and not item["bypass"]:
+                        html = (await engine.get_page_content()).lower()
+                        title = (await engine.page.title()).lower()
+                        blocked = any(
+                            marker in html
+                            for marker in (
+                                "ddchallengecontainer",
+                                "datadome captcha",
+                                "<title>403 forbidden</title>",
+                            )
+                        )
+                        loaded = "hermes" in title and "hermes.com" in engine.page.url.lower()
+                        item["bypass"] = loaded and not blocked
                     item["final_url"] = nav["url"]
                     item["error"] = None
                     if not item["bypass"] and attempt == 0:
