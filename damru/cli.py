@@ -2605,13 +2605,18 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
     async def _run_stealth() -> str:
         from .async_core import AsyncDamru
 
-        mode = str(getattr(args, "mode", "cdp") or "cdp").lower()
+        mode = str(getattr(args, "mode", "reattach") or "reattach").lower()
+        if mode == "cdp" and os.environ.get("DAMRU_EXPERIMENTAL_RAW_WORKER_CDP") is None:
+            os.environ["DAMRU_EXPERIMENTAL_RAW_WORKER_CDP"] = "1"
 
         damru = AsyncDamru(
+            device=getattr(args, "device", None),
             serial=serial,
             proxy=getattr(args, "proxy", None),
             http_proxy=getattr(args, "http_proxy", None),
+            timezone=getattr(args, "timezone", None),
             locale=getattr(args, "locale", None) or _locale_hint_for_url(url),
+            profile_tier=getattr(args, "profile_tier", None),
             keep_chrome_on_exit=True,
             force_cold_start=bool(getattr(args, "cold_start", False)),
             debug=getattr(args, "debug", False),
@@ -2619,13 +2624,17 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
         context = await damru.__aenter__()
         try:
             page = context.pages[0] if context.pages else await context.new_page()
-            if mode in {"native", "cdp"}:
+            if mode in {"native", "cdp", "reattach"}:
                 # Some protected mobile sites detect active DevTools/CDP
-                # navigation. Apply the profile first, then detach CDP and let
-                # Android Chrome perform a native VIEW intent. In cdp mode we
-                # reconnect after the page settles so automation can inspect it.
+                # navigation. Apply the profile first, then let Android Chrome
+                # perform a native VIEW intent. In cdp mode CDP stays attached
+                # so timezone/UA/hardware/touch overrides are live for the
+                # native-opened target page. In native mode CDP is fully
+                # detached. In reattach mode CDP is detached during load and
+                # reconnected afterwards for inspection/automation.
                 await page.goto("about:blank", wait_until="domcontentloaded", timeout=15000)
-                await damru.disconnect_cdp()
+                if mode in {"native", "reattach"}:
+                    await damru.disconnect_cdp()
 
                 package = "com.android.chrome"
                 activities = (
@@ -2659,7 +2668,7 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
                     if mode == "native":
                         return "native Android Chrome navigation"
 
-                    context2 = await damru.reconnect_cdp()
+                    context2 = await damru.reconnect_cdp() if mode == "reattach" else context
                     pages = list(context2.pages)
                     target_page = None
                     for candidate in pages:
@@ -3068,13 +3077,20 @@ def build_parser() -> argparse.ArgumentParser:
     stealth_open_url.add_argument("--url", required=True, help="http:// or https:// URL to open")
     stealth_open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL")
     stealth_open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
+    stealth_open_url.add_argument("--device", default=None, help="device profile name/model/slug; omitted means random premium profile")
+    stealth_open_url.add_argument(
+        "--profile-tier",
+        default=None,
+        help="random profile pool when --device is omitted: premium, medium, experimental, all, etc.",
+    )
     stealth_open_url.add_argument(
         "--mode",
-        choices=("cdp", "native", "playwright"),
-        default="cdp",
-        help="cdp detaches for native navigation then reattaches; native leaves CDP detached; playwright uses page.goto",
+        choices=("cdp", "reattach", "native", "playwright"),
+        default="reattach",
+        help="cdp keeps CDP live during native open; reattach detaches for native load then reconnects; native leaves CDP detached; playwright uses page.goto",
     )
     stealth_open_url.add_argument("--locale", default=None, help="explicit BCP-47 locale; .com.br URLs default to pt-BR when omitted")
+    stealth_open_url.add_argument("--timezone", default=None, help="explicit IANA timezone; omitted means auto from proxy or default profile geo")
     stealth_open_url.add_argument("--reuse-profile", dest="cold_start", action="store_false", help="reuse existing Chrome/profile state; default")
     stealth_open_url.add_argument("--cold-start", dest="cold_start", action="store_true", help="clear Chrome and rebuild profile before opening")
     stealth_open_url.set_defaults(cold_start=False)

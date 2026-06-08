@@ -45,9 +45,26 @@ def test_stealth_open_url_reuses_profile_by_default():
 
     args = parser.parse_args(["stealth-open-url", "--url", "https://example.com"])
     assert args.cold_start is False
+    assert args.timezone is None
+    assert args.mode == "reattach"
 
     args = parser.parse_args(["stealth-open-url", "--url", "https://example.com", "--cold-start"])
     assert args.cold_start is True
+
+    args = parser.parse_args([
+        "stealth-open-url",
+        "--url",
+        "https://example.com",
+        "--timezone",
+        "Asia/Tokyo",
+        "--device",
+        "Samsung Galaxy S24",
+        "--profile-tier",
+        "all",
+    ])
+    assert args.timezone == "Asia/Tokyo"
+    assert args.device == "Samsung Galaxy S24"
+    assert args.profile_tier == "all"
 
     args = parser.parse_args([
         "stealth-open-url",
@@ -135,7 +152,7 @@ def test_stealth_open_url_keeps_session_alive_through_native_open(monkeypatch):
 
     class FakeDamru:
         def __init__(self, **kwargs):
-            events.append(("init", kwargs.get("serial"), kwargs.get("locale")))
+            events.append(("init", kwargs.get("serial"), kwargs.get("locale"), kwargs.get("device")))
             device = types.SimpleNamespace(hardware_concurrency=8)
             self._profile = types.SimpleNamespace(locale="en-US", device=device)
             self._sync_ua_payload = {"userAgent": "UA"}
@@ -205,8 +222,87 @@ def test_stealth_open_url_keeps_session_alive_through_native_open(monkeypatch):
     ])
 
     assert cli._stealth_open_url(args) == 0
-    assert ("disconnect",) in events
-    assert any(e[0] == "reconnect" for e in events)
-    assert events.index(("disconnect",)) < next(i for i, e in enumerate(events) if e[0] == "adb")
+    assert ("disconnect",) not in events
+    assert not any(e[0] == "reconnect" for e in events)
     for kind in ("hardware", "touch", "network", "storage", "tz", "ua", "workers"):
         assert any(e[0] == kind for e in events)
+
+
+def test_stealth_open_url_reattach_mode_detaches_during_load(monkeypatch):
+    events = []
+
+    class FakePage:
+        url = "https://example.com"
+
+        async def goto(self, url, wait_until=None, timeout=None):
+            events.append(("goto", url))
+
+        async def title(self):
+            return "Example"
+
+    class FakeContext:
+        pages = [FakePage()]
+
+        async def new_page(self):
+            return self.pages[0]
+
+        async def new_cdp_session(self, page):
+            class Session:
+                async def send(self, *args, **kwargs):
+                    pass
+            return Session()
+
+    class FakeDamru:
+        def __init__(self, **kwargs):
+            device = types.SimpleNamespace(hardware_concurrency=8)
+            self._profile = types.SimpleNamespace(locale="en-US", device=device)
+            self._context = FakeContext()
+
+        async def __aenter__(self):
+            events.append(("enter",))
+            return self._context
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            events.append(("exit",))
+
+        async def disconnect_cdp(self):
+            events.append(("disconnect",))
+
+        async def reconnect_cdp(self):
+            events.append(("reconnect",))
+            return self._context
+
+        async def _apply_devtools_evasion(self): pass
+        async def _apply_hardware_overrides(self, device): pass
+        async def _apply_touch_emulation(self, device): pass
+        async def _apply_network_emulation(self): pass
+        async def _apply_storage_quota_override(self, device): pass
+        async def _apply_timezone_override(self): pass
+        async def _apply_ua_override(self, device, chrome_version=None, android_version=None): pass
+        async def _arm_worker_core_override(self, cores): pass
+        async def _apply_locale_override(self, locale): pass
+
+    def fake_run_adb_text(serial, *args, timeout=30):
+        events.append(("adb", args))
+        return _cp(0, stdout="Starting: Intent")
+
+    monkeypatch.setattr("damru.async_core.AsyncDamru", FakeDamru)
+    monkeypatch.setattr(cli, "_run_adb_text", fake_run_adb_text)
+    monkeypatch.setattr(cli, "_ensure_adb_connected", lambda serial: None)
+    monkeypatch.setattr(cli, "_repair_runtime_internet", lambda serial, quiet=True: None)
+
+    args = cli.build_parser().parse_args([
+        "stealth-open-url",
+        "--serial",
+        "wsl:127.0.0.1:5600",
+        "--url",
+        "https://example.com",
+        "--mode",
+        "reattach",
+    ])
+
+    assert cli._stealth_open_url(args) == 0
+    assert ("disconnect",) in events
+    assert ("reconnect",) in events
+    assert events.index(("disconnect",)) < next(i for i, e in enumerate(events) if e[0] == "adb")
+    assert next(i for i, e in enumerate(events) if e[0] == "adb") < events.index(("reconnect",))
