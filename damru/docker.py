@@ -448,8 +448,9 @@ class RedroidManager:
         err = stderr.decode("utf-8", errors="replace").strip()
 
         if proc.returncode != 0 and not allow_failure:
-            detail = '\n'.join(part for part in (out, err) if part)
-            raise DamruError(f"Command failed: {' '.join(cmd)}\n{detail}")
+            detail = "\n".join(part for part in (out, err) if part)
+            suffix = f"\n{detail}" if detail else ""
+            raise DamruError(f"Command failed: {' '.join(cmd)}{suffix}")
 
         return out
 
@@ -1643,6 +1644,13 @@ chmod 755 "$target"
         webview = webview_version.strip()
         return webview == chrome or webview.startswith(f'{chrome}.')
 
+    def _target_chrome_version_from_apk_path(self, apk_path: str) -> Optional[str]:
+        """Return the bundle version when apk_path points at chrome-apks/<version>."""
+        p = Path(apk_path)
+        if p.is_dir() and list(p.glob("*.apk")):
+            return p.name
+        return None
+
     async def uninstall_chrome(self, serial: str) -> None:
         """Uninstall Chrome and TrichromeLibrary from a container."""
         for pkg in [
@@ -1843,8 +1851,17 @@ chmod 755 "$target"
 
             # Step 2: Install Chrome
             apk_path = chrome_apk or self.find_chrome_apk()
-            logger.info("Installing Chrome from %s...", apk_path)
-            await self.install_chrome(serial, apk_path)
+            current_chrome = await self.get_installed_chrome_version(serial)
+            target_chrome = self._target_chrome_version_from_apk_path(apk_path)
+            if current_chrome and target_chrome and current_chrome == target_chrome:
+                logger.info(
+                    "Chrome %s is already installed on %s; skipping APK reinstall",
+                    current_chrome,
+                    serial,
+                )
+            else:
+                logger.info("Installing Chrome from %s...", apk_path)
+                await self.install_chrome(serial, apk_path)
 
             # Step 3: Install local TTS engines/voices
             logger.info("Installing local TTS engines...")
@@ -1963,8 +1980,41 @@ chmod 755 "$target"
             await adb.shell_root(f"rm -f {tmp}")
             logger.info("Universal Preferences baked (DoH, WebRTC, privacy)")
 
+            # WebView Shell uses Android WebView's pref_store, not Chrome's
+            # app_chrome/Default/Preferences. Patch it separately so local
+            # WebView-based capture harnesses do not boot with default locale
+            # and network prediction settings.
+            try:
+                webview_shell = ChromeManager(adb, package="org.chromium.webview_shell")
+                await webview_shell.detect_package(retries=3, delay=1.0)
+                await webview_shell.force_stop()
+                await webview_shell.write_command_line([
+                    "--disable-fre",
+                    "--no-first-run",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-translate",
+                    "--disable-sync",
+                    "--metrics-recording-only",
+                    "--lang=en-US",
+                    "--accept-lang=en-US,en",
+                    "--force-webrtc-ip-handling-policy=default_public_interface_only",
+                    "--enforce-webrtc-ip-permission-check",
+                    "--dns-prefetch-disable",
+                    "--disable-background-networking",
+                    "--disable-client-side-phishing-detection",
+                    "--disable-component-update",
+                    "--disable-domain-reliability",
+                    "--no-pings",
+                ])
+                await webview_shell.patch_preferences("en-US", "en-US,en;q=0.9")
+                await webview_shell.force_stop()
+                logger.info("Universal WebView Shell Preferences baked")
+            except Exception as exc:
+                logger.warning("WebView Shell hardening was not baked: %s", exc)
+
             # Force-stop all apps to get a clean snapshot
             await adb.shell("am force-stop com.android.chrome", allow_failure=True)
+            await adb.shell("am force-stop org.chromium.webview_shell", allow_failure=True)
             await asyncio.sleep(1)
 
             # Step 12: docker commit → custom image

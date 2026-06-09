@@ -21,7 +21,9 @@ CHROME_PACKAGES = [
     "com.chrome.canary",
     "org.chromium.chrome",
 ]
-
+WEBVIEW_SHELL_PACKAGES = {
+    "org.chromium.webview_shell",
+}
 WEBVIEW_SHELL_PACKAGE = "org.chromium.webview_shell"
 
 
@@ -35,6 +37,7 @@ class ChromeManager:
     def __init__(self, adb: ADB, package: Optional[str] = None):
         self.adb = adb
         self.package = package or "com.android.chrome"
+        self.devtools_socket_name = "chrome_devtools_remote"
 
     async def detect_package(self, retries: int = 30, delay: float = 2.0) -> str:
         """Find which Chrome variant is installed.
@@ -42,9 +45,19 @@ class ChromeManager:
         Retries because package manager may not be fully initialised immediately
         after a fresh Android boot (pm list packages returns empty too early).
         """
+        explicit_package = self.package if self.package not in CHROME_PACKAGES else None
         for attempt in range(max(1, retries)):
             out = await self.adb.shell("pm list packages", allow_failure=True)
             installed = set(line.replace("package:", "").strip() for line in out.splitlines())
+            if explicit_package:
+                if explicit_package in installed:
+                    return explicit_package
+                if attempt < retries - 1:
+                    logger.debug("Package %s not ready (attempt %d/%d), waiting %.0fs...",
+                                 explicit_package, attempt + 1, retries, delay)
+                    await sleep(delay)
+                    continue
+                raise ChromeError(f"Browser package not found on device: {explicit_package}")
             for pkg in CHROME_PACKAGES:
                 if pkg in installed:
                     self.package = pkg
@@ -54,6 +67,22 @@ class ChromeManager:
                 logger.debug("Package manager not ready (attempt %d/%d), waiting %.0fs…", attempt + 1, retries, delay)
                 await sleep(delay)
         raise ChromeError("No Chrome browser found on device. Install Chrome first.")
+
+    def _is_webview_shell(self) -> bool:
+        return self.package in WEBVIEW_SHELL_PACKAGES
+
+    def _command_line_path(self) -> str:
+        if self._is_webview_shell():
+            return "/data/local/tmp/webview-command-line"
+        return "/data/local/tmp/chrome-command-line"
+
+    def _command_line_argv0(self) -> str:
+        return "webview" if self._is_webview_shell() else "chrome"
+
+    def _preferences_path(self) -> str:
+        if self._is_webview_shell():
+            return f"/data/data/{self.package}/app_webview/pref_store"
+        return f"/data/data/{self.package}/app_chrome/Default/Preferences"
 
     async def get_version(self) -> str:
         """Get installed Chrome version string."""
@@ -70,7 +99,7 @@ class ChromeManager:
         await sleep(0.3)
 
     async def write_command_line(self, flags: List[str]) -> None:
-        """Write Chrome command-line flags to /data/local/tmp/chrome-command-line.
+        """Write Chromium command-line flags for Chrome or WebView Shell.
 
         Chrome reads this file on startup. Format: first token is ignored (argv[0]),
         rest are flags. Must force-stop and relaunch for flags to take effect.
@@ -103,22 +132,22 @@ class ChromeManager:
         if disable_features:
             final_flags.append(f"--disable-features={','.join(disable_features)}")
 
-        # Android Chrome expects argv[0] to look like a browser binary name.
+        # Android Chromium expects argv[0] to look like a browser binary name.
         # Some builds tolerate any placeholder, but Chrome 145 on Redroid only
         # honored remote debugging when this token was `chrome`.
-        cmd_line = "chrome " + " ".join(final_flags)
+        cmd_line = self._command_line_argv0() + " " + " ".join(final_flags)
 
         # Write via printf to avoid shell quoting issues with echo
         # Escape special chars for shell
         safe_line = cmd_line.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
         await self.adb.shell_root(
-            f'printf "%s" "{safe_line}" > /data/local/tmp/chrome-command-line'
+            f'printf "%s" "{safe_line}" > {self._command_line_path()}'
         )
-        await self.adb.shell_root("chmod 644 /data/local/tmp/chrome-command-line")
-        logger.debug("Chrome command-line: %s", cmd_line[:200])
+        await self.adb.shell_root(f"chmod 644 {self._command_line_path()}")
+        logger.debug("Chromium command-line for %s: %s", self.package, cmd_line[:200])
 
     async def write_webview_command_line(self, flags: List[str], user_agent: Optional[str] = None) -> None:
-        """Write Android WebView command-line flags for WebView Shell."""
+        """Write WebView Shell flags, preserving a WebView-specific UA when provided."""
         final_flags: List[str] = []
         for flag in flags:
             flag = flag.strip()
@@ -133,27 +162,29 @@ class ChromeManager:
         if not any(f.startswith("--remote-allow-origins=") for f in final_flags):
             final_flags.append("--remote-allow-origins=*")
 
-        cmd_line = "webview " + " ".join(final_flags)
+        manager = ChromeManager(self.adb, package=WEBVIEW_SHELL_PACKAGE)
+        cmd_line = manager._command_line_argv0() + " " + " ".join(final_flags)
         safe_line = cmd_line.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
-        await self.adb.shell_root(
-            f'printf "%s" "{safe_line}" > /data/local/tmp/webview-command-line'
-        )
-        await self.adb.shell_root("chmod 644 /data/local/tmp/webview-command-line")
+        await self.adb.shell_root(f'printf "%s" "{safe_line}" > {manager._command_line_path()}')
+        await self.adb.shell_root(f"chmod 644 {manager._command_line_path()}")
         logger.debug("WebView command-line: %s", cmd_line[:200])
 
     async def launch(self, url: str = "about:blank", startup_delay: float = 4.0) -> None:
-        """Launch Chrome via am start.
+        """Launch Chromium-based browser via am start.
 
         After pm clear, Chrome needs extra startup time to initialize
         fresh profile data and render the FRE screen (~4s).
         On warm reuse (no pm clear), Chrome starts faster (~2s).
         """
         package = await self.detect_package(retries=30, delay=2.0)
-        activities = [
-            "com.google.android.apps.chrome.Main",
-            "org.chromium.chrome.browser.ChromeTabbedActivity",
-            "org.chromium.chrome.browser.ChromeTabbedActivity2",
-        ]
+        if self._is_webview_shell():
+            activities = [".WebViewBrowserActivity"]
+        else:
+            activities = [
+                "com.google.android.apps.chrome.Main",
+                "org.chromium.chrome.browser.ChromeTabbedActivity",
+                "org.chromium.chrome.browser.ChromeTabbedActivity2",
+            ]
         last_error = ""
         launched = False
         for launch_probe in range(4):
@@ -320,18 +351,25 @@ class ChromeManager:
         return True
 
     async def wait_for_devtools_socket(self, timeout: float = 15.0) -> bool:
-        """Poll for chrome_devtools_remote socket to become available."""
+        """Poll for the browser DevTools socket to become available."""
         import time
         start = time.monotonic()
         while time.monotonic() - start < timeout:
             out = await self.adb.shell(
-                "cat /proc/net/unix 2>/dev/null | grep chrome_devtools_remote",
+                "cat /proc/net/unix 2>/dev/null",
                 allow_failure=True,
             )
-            if "chrome_devtools_remote" in out:
+            if self._is_webview_shell():
+                for line in out.splitlines():
+                    if "webview_devtools_remote_" not in line:
+                        continue
+                    self.devtools_socket_name = line.rsplit("@", 1)[-1].strip()
+                    return True
+            elif "chrome_devtools_remote" in out:
+                self.devtools_socket_name = "chrome_devtools_remote"
                 return True
             await sleep(1.0)
-        logger.warning("Chrome devtools socket not found after %.1fs", timeout)
+        logger.warning("Browser devtools socket not found after %.1fs", timeout)
         return False
 
     async def clear_all_data(self) -> None:
@@ -379,7 +417,7 @@ class ChromeManager:
         After targeted_cleanup (warm start), it persists.
         Uses su 0 because /data/data/<pkg>/ is not accessible to shell user.
         """
-        prefs_path = f"/data/data/{self.package}/app_chrome/Default/Preferences"
+        prefs_path = self._preferences_path()
         out = await self.adb.shell(
             f"su 0 test -f {prefs_path} && echo OK",
             timeout=5, allow_failure=True,
@@ -388,7 +426,7 @@ class ChromeManager:
 
     async def clear_command_line(self) -> None:
         """Remove the Chrome command-line flags file."""
-        await self.adb.shell_root("rm -f /data/local/tmp/chrome-command-line")
+        await self.adb.shell_root(f"rm -f {self._command_line_path()}")
 
     async def patch_preferences(self, locale: str, accept_lang: str) -> None:
         """Patch Chrome's Preferences file for stealth operation.
@@ -408,7 +446,7 @@ class ChromeManager:
             locale: BCP-47 locale (e.g. "en-PH")
             accept_lang: Accept-Language value (e.g. "en-PH,en-US;q=0.9,en;q=0.8")
         """
-        prefs_path = f"/data/data/{self.package}/app_chrome/Default/Preferences"
+        prefs_path = self._preferences_path()
 
         # Read current preferences (or create minimal if not yet existing)
         # Must use root — /data/data/<pkg>/ is mode 700 owned by Chrome's UID,
@@ -540,7 +578,7 @@ class ChromeManager:
         await self.adb.shell_root(f"chmod 600 {prefs_path}")
         await self.adb.shell_root(f"rm -f {tmp}")
 
-        logger.info("Chrome language patched: %s → %s", locale, selected)
+        logger.info("%s language patched: %s → %s", self.package, locale, selected)
 
     async def patch_webview_preferences(
         self,
@@ -548,57 +586,9 @@ class ChromeManager:
         accept_lang: str,
         package: str = WEBVIEW_SHELL_PACKAGE,
     ) -> None:
-        """Patch WebView Shell's app_webview/pref_store without JS hooks."""
-        prefs_path = f"/data/data/{package}/app_webview/pref_store"
-        raw = await self.adb.shell(
-            f"su 0 cat {prefs_path}", timeout=10, allow_failure=True,
-        )
-        if not raw or raw.startswith("cat:") or "No such file" in raw or "Permission denied" in raw:
-            prefs_dir = prefs_path.rsplit("/", 1)[0]
-            await self.adb.shell_root(f"mkdir -p {prefs_dir}")
-            prefs = {}
-        else:
-            try:
-                prefs = json.loads(raw)
-            except json.JSONDecodeError:
-                logger.warning("WebView pref_store is not valid JSON, starting fresh")
-                prefs = {}
-
-        langs = [part.split(";")[0].strip() for part in accept_lang.split(",")]
-        selected = ",".join(langs)
-        prefs.setdefault("intl", {})["selected_languages"] = selected
-        prefs.setdefault("webrtc", {})["ip_handling_policy"] = "default_public_interface_only"
-        prefs.setdefault("dns_prefetching", {})["enabled"] = False
-        prefs.setdefault("net", {})["network_prediction_options"] = 2
-        prefs.setdefault("safebrowsing", {})["enabled"] = False
-        prefs.setdefault("alternate_error_pages", {})["enabled"] = False
-        prefs.setdefault("background_sync", {})["enabled"] = False
-        prefs.setdefault("dns_over_https", {})["mode"] = "off"
-
-        patched_json = json.dumps(prefs, separators=(",", ":"))
-        tmp = "/data/local/tmp/damru_webview_prefs.json"
-        local_tmp = None
-        fd, local_tmp = tempfile.mkstemp(prefix="damru_webview_prefs_", suffix=".json")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-                f.write(patched_json)
-            await self.adb.push(local_tmp, tmp)
-        finally:
-            if local_tmp and os.path.exists(local_tmp):
-                try:
-                    os.remove(local_tmp)
-                except OSError:
-                    pass
-
-        owner = await self.adb.shell(
-            f"su 0 stat -c '%U:%G' /data/data/{package}", timeout=5, allow_failure=True,
-        )
-        await self.adb.shell_root(f"cp {tmp} {prefs_path}")
-        if owner and ":" in owner and "stat:" not in owner:
-            await self.adb.shell_root(f"chown {owner.strip()} {prefs_path}")
-        await self.adb.shell_root(f"chmod 600 {prefs_path}")
-        await self.adb.shell_root(f"rm -f {tmp}")
-        logger.info("WebView language patched: %s -> %s", locale, selected)
+        """Compatibility wrapper for callers that harden WebView Shell explicitly."""
+        manager = ChromeManager(self.adb, package=package)
+        await manager.patch_preferences(locale, accept_lang)
 
     async def webview_shell_installed(self, package: str = WEBVIEW_SHELL_PACKAGE) -> bool:
         out = await self.adb.shell(f"pm list packages {package}", timeout=8, allow_failure=True)

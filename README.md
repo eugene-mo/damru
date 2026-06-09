@@ -14,6 +14,7 @@
     <strong>Community:</strong>
     <a href="https://discord.gg/GsxFdjdrT">Discord server</a> recommended | <a href="https://www.reddit.com/r/Damru">r/Damru</a>
   </p>
+  <p><strong>Support development:</strong> Damru is a research-heavy, one-of-a-kind Android automation stack that consumes real AI credits, RAM, hardware time, and weeks of testing. If it saves you time, please consider donating at <a href="https://damru.dev/">damru.dev</a>.</p>
   <p><strong>Contact:</strong> <a href="mailto:contact@damru.dev">contact@damru.dev</a></p>
   <p><strong>Official repository:</strong> <a href=https://github.com/akwin1234/damru>github.com/akwin1234/damru</a></p>
 </div>
@@ -579,9 +580,10 @@ Use `force-profile` when an already-running worker needs a specific Android iden
 ```bash
 python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
 python -m damru force-profile --serial 127.0.0.1:5600 --device motorola_moto_g_5s_plus --no-chrome --clear-proxy
+python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a --browser-package org.chromium.webview_shell --locale pt-BR --timezone America/Sao_Paulo
 ```
 
-The command applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, and Chrome command-line/preferences by default. `--no-chrome` keeps it to Android-level changes for WebView Shell or other non-Chrome harnesses. By default it preserves an existing Android system proxy; pass `--clear-proxy` for clean direct-network debug runs. Full Damru sessions still own GPU, memory preload, and CDP runtime overrides because those depend on the browser package and active DevTools context.
+The command applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, native Vulkan GPU spoofing, memory preload, and Chromium command-line/preferences by default. Use `--browser-package org.chromium.webview_shell` when a WebView Shell harness needs the same profile hardening; WebView Shell reads `/data/local/tmp/webview-command-line` and `app_webview/pref_store`, not Chrome's command-line or `app_chrome/Default/Preferences`. `--no-chrome` keeps it to Android/native-level changes, `--no-gpu` and `--no-memory` disable those native layers for isolation tests, and `--clear-proxy` avoids inheriting a worker's current Android HTTP proxy. CDP runtime overrides still belong to the harness because they depend on the active DevTools page target.
 
 ### Fleet Preflight
 
