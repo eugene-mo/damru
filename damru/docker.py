@@ -1322,7 +1322,25 @@ chmod 755 "$target"
         return f'{REDROID_CONTAINER_PREFIX}{index}', port
 
     async def _replace_system_webview_apk(self, serial: str, webview_apk: Path) -> None:
-        target = self._container_name_port_for_serial(serial)
+        plain = self._plain_serial(serial)
+        try:
+            port = int(plain.rsplit(':', 1)[1])
+        except Exception as exc:
+            raise DamruError(
+                'System WebView replacement requires a Damru Redroid worker serial such as 127.0.0.1:5600.'
+            ) from exc
+        name = ''
+        out = await self._run_cmd(
+            self._docker_cmd(
+                'ps', '-a',
+                '--filter', f'publish={port}',
+                '--format', '{{.Names}}',
+            ),
+            timeout=10,
+            allow_failure=True,
+        )
+        name = next((line.strip() for line in out.splitlines() if line.strip()), '')
+        target = (name, port) if name else self._container_name_port_for_serial(serial)
         if target is None:
             raise DamruError(
                 'System WebView replacement requires a Damru Redroid worker serial such as 127.0.0.1:5600.'

@@ -25,10 +25,10 @@ from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_b
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines, wsl_runtime_network_repair_script
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
-_DAMRU_IMAGE_SHA256 = "e394c704b63ea70dd6635e17df0cec8503ef9a8d1e17eee3f22b045e8390a884"
+_DAMRU_IMAGE_SHA256 = "357751c6ad3baffdad9dfeadde1ce0ae31b534012a4c6cb226e0077a619dab69"
 _DAMRU_IMAGE_URL = "https://drive.google.com/file/d/1AzSTOlGpSfqHB-F-Yty2JqbOEMlgFT5F/view?usp=sharing"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
-_DAMRU_APKS_URL = "https://cosmicresidential.com/chrome-apks.zip"
+_DAMRU_APKS_URL = "https://damru.dev/assets/chrome-apks.zip"
 _DAMRU_APKS_MIRROR_URL = "https://drive.google.com/file/d/1xh5Z-LXqUIEjO08KKjhaB_89KS2pBWZq/view?usp=sharing"
 _CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
 
