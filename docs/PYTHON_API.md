@@ -190,6 +190,26 @@ print(result.description)
 
 `force-profile` applies Android props, release string, timezone, locale, display size/density, CPU core spoofing, native Vulkan GPU spoofing, memory preload, and Chromium command-line/preferences by default. Locale writes include modern `persist.sys.locale`/`system_locales` plus legacy `persist.sys.language` and `persist.sys.country`, so Android Chrome/WebView-family processes do not keep a stale `en-US` language. Pass `--browser-package org.chromium.webview_shell` for WebView Shell harnesses; Damru will write `/data/local/tmp/webview-command-line` and `app_webview/pref_store` instead of Chrome's command-line/preferences. Pass `--no-chrome` or `configure_chrome=False` only for harnesses that cannot use Chromium preferences, `--no-gpu` / `--no-memory` for native-layer isolation tests, and `--clear-proxy` or `clear_proxy=True` when a debug run should not inherit the worker's current Android HTTP proxy. CDP overrides remain part of the runtime harness because they are active-page specific.
 
+### WebView Shell and Custom WebView Apps
+
+Use WebView Shell when you need to validate Android WebView behavior without Chrome UI:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell --proxy socks5://user:pass@host:port
+adb -s 127.0.0.1:5600 shell am start -n org.chromium.webview_shell/.WebViewBrowserActivity -a android.intent.action.VIEW -d https://example.com
+```
+
+That path writes `/data/local/tmp/webview-command-line`, patches `/data/data/org.chromium.webview_shell/app_webview/pref_store`, enables native memory preload for `org.chromium.webview_shell`, and applies WebRTC blocking when a proxy is active.
+
+For your own Android app that embeds WebView, keep the system WebView provider aligned through the baked image or Chrome/WebView APK bundle, then apply Android-level profile hardening and launch your app separately:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --no-chrome --proxy socks5://user:pass@host:port
+adb -s 127.0.0.1:5600 shell am start -n com.example.webview/.MainActivity -a android.intent.action.VIEW -d https://example.com
+```
+
+Do not pass arbitrary app package names to `--browser-package` unless that app has a Chromium-compatible profile layout. PR #8's package-specific command-line/preference hardening is intentionally wired for `org.chromium.webview_shell`; generic embedded WebView apps still benefit from the aligned system WebView, Android props, timezone/locale, display, CPU/GPU, memory, proxy, and DNS layers.
+
 ---
 
 ## Advanced Configuration

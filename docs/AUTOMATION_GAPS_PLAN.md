@@ -12,7 +12,8 @@ This file is the current automation checklist. Older notes in this repo may ment
 | Dependencies | `install-deps` installs Linux/WSL packages, Docker, ADB, binderfs tools, and applies Damru's Playwright patch. |
 | Baked image | `install-image` loads or downloads `damru-redroid:latest` when available. |
 | Raw APK assets | `install-apks --download` downloads/extracts Chrome/WebView/TTS/resetprop assets to `/home/damru/chrome-apks`. |
-| Chrome rotation | Random profile actions rotate through Chrome APK folders only when that folder also includes a matching WebView APK. |
+| Chrome/WebView rotation | Random profile actions rotate through Chrome APK folders only when that folder also includes a matching WebView APK; explicit Chrome pins fail when WebView parity is missing. |
+| WebView Shell hardening | `force-profile --browser-package org.chromium.webview_shell` writes WebView command-line/preferences and applies native memory preload for WebView harness validation. |
 | Preflight | `check preflight` is fast, read-only, JSON-capable, and suitable for deployment scripts. |
 | Deep environment check | `check-env` performs slower setup validation and optional viewer checks. |
 | WSL repair | `fix-wsl` repairs safe Docker, binderfs, iptables, DNS, and WSL networking cases. |
@@ -52,6 +53,7 @@ python -m damru check-env --viewer
 python -m damru fix-wsl
 python -m damru fix-internet --all
 python -m damru quick-check --serial 127.0.0.1:5600
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell
 python -m damru open-url --serial 127.0.0.1:5600 --url https://example.com
 python -m damru ui
 ```

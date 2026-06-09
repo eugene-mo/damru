@@ -17,7 +17,14 @@ For an existing rooted worker that is already running, force one profile by name
 ```bash
 python -m damru force-profile --serial 127.0.0.1:5600 --device xiaomi_redmi_9a
 python -m damru force-profile --serial 127.0.0.1:5600 --device "Moto G (5S) Plus" --no-chrome --clear-proxy
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell
 ```
+
+For WebView Shell harnesses, pass `--browser-package org.chromium.webview_shell`. Damru applies the same Android props, timezone, locale, display, CPU, GPU, memory preload, and proxy profile path, then writes WebView-specific `/data/local/tmp/webview-command-line` and `app_webview/pref_store` instead of only Chrome preferences. Chrome CDP remains the primary automation path; WebView Shell support is for WebView validation and debugging.
+
+For custom Android apps that embed WebView, use the aligned system WebView from the baked image or APK bundle, apply Android-level hardening with `--no-chrome`, then launch the app with `adb shell am start`. Do not pass arbitrary app packages to `--browser-package` unless the app uses Chrome/WebView Shell-compatible command-line and preference paths.
+
+When `--rotate-chrome` is used, Damru rotates Chrome only to version folders that also include a matching WebView APK. This keeps WebView-family processes aligned with the Chrome version used for profile and Client Hints work.
 
 GPU families matter most for emulator compatibility. MuMu is Adreno-oriented; Redroid is the supported path for full automation.
 

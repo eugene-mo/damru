@@ -2,6 +2,7 @@
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
+  <p><em>श्री शिवाय नमस्तुभ्यं</em></p>
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
 
@@ -89,6 +90,8 @@ Damru's most advanced stealth layers - including native GPU binary patching and 
 *   **Massive Device Database**: Built-in profiles for 155 real Android devices (Samsung, Pixel, Xiaomi, Redmi, POCO, OnePlus, OPPO, Realme, Vivo, iQOO, Motorola, Honor, Sony, Nokia/HMD, ASUS, Tecno, Infinix, ZTE/Nubia, etc.) with realistic hardware specifications. Default random selection uses premium profiles only; medium and experimental profiles are opt-in.
 *    **Display & Resolution Spoofing**: Natively overrides screen dimensions and DPI via Android's Window Manager (`wm size/density`) for physical accuracy.
 *    **Browser Version & Client Hints Randomization**: Dynamically selects from the validated Chrome APK bundle, rotates compatible Chrome builds with random profiles, and generates matching `sec-ch-ua` Client Hints including Chromium GREASE brand permutations.
+*   **Chrome + WebView Alignment**: Random Chrome rotation only uses version folders with matching WebView assets, replaces the system WebView provider during install/bake, and refuses explicit Chrome versions that would leave WebView behind.
+*   **WebView Shell Hardening**: `force-profile --browser-package org.chromium.webview_shell` applies Damru's native memory preload, GPU/CPU/profile props, WebView command line, and `app_webview/pref_store` preferences for WebView Shell harnesses.
 *    **TLS/JA3 Randomization**: Generates ~184 unique TLS fingerprints from a single binary by dynamically toggling cipher suites and experimental flags.
 
 *   **Fast Preflight Checks**: `python -m damru check preflight` performs read-only Docker, ADB, binderfs, image, APK, resource, WSL kernel, port, and config checks with JSON output for fleet scripts.
@@ -303,7 +306,26 @@ chrome-apks/
   magisk.apk
 ```
 
-Chrome rotation only uses version folders that include a matching `webview.apk` or `TrichromeWebView.apk`. This prevents the old failure mode where Chrome updated to a new version while Android WebView stayed on the baked system version. Version folders without a matching WebView asset are kept for manual work but skipped by random rotation and reported by preflight.
+Chrome rotation only uses version folders that include a matching `webview.apk` or `TrichromeWebView.apk`. This prevents the old failure mode where Chrome updated to a new version while Android WebView stayed on the baked system version. Version folders without a matching WebView asset are kept for manual work but skipped by random rotation and reported by preflight. Explicit `--chrome-version` selection also requires a matching WebView asset, so Damru fails loudly instead of silently running Chrome 148 with WebView 125.
+
+When Damru installs a version folder, it installs the matching Trichrome library if present, replaces `/system/product/app/webview/webview.apk`, fixes ownership/permissions to Android-safe `root:root 0644`, and clears stale WebView oat/dalvik cache. This keeps Chrome, Android WebView, and WebView Shell on the same Chromium engine where the bundle provides matching assets.
+
+For WebView Shell testing, apply a profile with:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell
+```
+
+This writes `/data/local/tmp/webview-command-line`, patches `app_webview/pref_store`, applies native memory preload for `org.chromium.webview_shell`, and keeps the normal Android props/timezone/locale/GPU/CPU profile path. Chrome CDP automation is still the primary API; WebView Shell support is for harness validation and WebView-specific debugging.
+
+For a custom Android app that embeds the system WebView, use Damru's Chrome/WebView-aligned image or APK bundle first, then apply Android-level profile hardening without writing Chrome-specific preferences:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --no-chrome --proxy socks5://user:pass@host:port
+adb -s 127.0.0.1:5600 shell am start -n com.example.webview/.MainActivity -a android.intent.action.VIEW -d https://example.com
+```
+
+Do not pass an arbitrary custom WebView app to `--browser-package` unless it is a Chromium-style package that uses the same profile layout as Chrome. Full WebView command-line + `app_webview/pref_store` hardening is currently wired for `org.chromium.webview_shell`; custom app packages still benefit from the aligned Android WebView provider, system props, timezone/locale, display, CPU/GPU, proxy, and DNS setup.
 
 Manual Linux/WSL extraction, from the directory where you downloaded the bundle:
 

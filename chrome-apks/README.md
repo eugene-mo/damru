@@ -48,9 +48,30 @@ chrome-apks/
 
 Each Chrome version folder must contain its matching Trichrome library split plus the Chrome split APKs. Do not deduplicate `google_trichrome_library.apk` across versions; the file is version-matched and differs by build.
 
+Each folder that Damru should use for automatic rotation must also contain a matching `webview.apk` or `TrichromeWebView.apk`. Damru treats Chrome-only folders as incomplete for automation because Android WebView and WebView Shell would otherwise stay on the old system provider.
+
 ## Chrome Rotation
 
 The current bundle has 19 validated Chrome versions from `143.0.7499.52` through `148.0.7778.217`. Random profile actions can rotate Chrome to another validated version when the bundle exists. The rotation is tied to the same setup path that clears stale Chrome tabs and suppresses first-run prompts.
+
+Rotation is Chrome/WebView paired. During install or image baking, Damru installs the matching Trichrome library when present, replaces the Redroid system WebView APK, fixes `/system/product/app/webview/webview.apk` permissions to `root:root 0644`, and clears stale WebView oat/dalvik cache. Explicit `--chrome-version` selection fails if the matching WebView asset is missing.
+
+WebView Shell harnesses can then receive the same profile hardening with:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --browser-package org.chromium.webview_shell
+```
+
+That path writes `/data/local/tmp/webview-command-line`, patches `app_webview/pref_store`, and enables native memory preload for `org.chromium.webview_shell`.
+
+For custom Android apps that embed system WebView, use the baked image or this aligned APK bundle so the system WebView provider is current, then apply Android-level hardening without Chrome preference writes:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --no-chrome
+adb -s 127.0.0.1:5600 shell am start -n com.example.webview/.MainActivity -d https://example.com
+```
+
+Only `org.chromium.webview_shell` receives the package-specific WebView command-line and `app_webview/pref_store` hardening today.
 
 Chrome 149 is not included yet. Available APKMirror bundles tested so far were missing the required English/x86/x86_64 split layout, so Damru skips them instead of shipping a folder that installs unreliably.
 

@@ -39,6 +39,16 @@ The APK installer extracts to `/home/damru/chrome-apks` by default and validates
 
 Random profile actions rotate only through Chrome version folders with a matching WebView APK. Folders without a matching WebView asset are skipped so Chrome and Android WebView do not drift apart.
 
+During install or bake, Damru replaces the Redroid system WebView APK with the matching bundle WebView, fixes ownership/permissions to `root:root 0644`, and clears stale WebView oat/dalvik-cache files. This avoids Android rejecting the provider as a writable dex file and keeps WebView Shell/custom WebView harnesses on the same Chromium engine as Chrome.
+
+Explicit Chrome pinning is strict:
+
+```bash
+python -m damru force-profile --serial 127.0.0.1:5600 --device pixel_8_pro --rotate-chrome --chrome-version 148.0.7778.217
+```
+
+The command only succeeds when that version folder has a matching `webview.apk` or `TrichromeWebView.apk`.
+
 ## Readiness Checks
 
 `python -m damru check preflight` is fast and read-only. It does not install packages, pull/load images, mount binderfs, start containers, edit iptables, or change `.wslconfig`. Use `--json` for automation:

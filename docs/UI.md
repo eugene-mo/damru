@@ -48,7 +48,7 @@ Actions:
 - **Check environment**: runs `python -m damru check-env` style validation.
 - **Install dependencies**: installs Linux/WSL packages such as Docker, ADB, curl, wget, jq, iptables, and module tooling.
 - **Repair runtime**: runs safe Docker, binderfs, iptables, NAT, DNS, and WSL route repair paths.
-- **Install APK bundle**: downloads/extracts Chrome, WebView, TTS, RHVoice, eSpeak, and Magisk/resetprop assets when needed.
+- **Install APK bundle**: downloads/extracts Chrome, matching per-version WebView, TTS, RHVoice, eSpeak, and Magisk/resetprop assets when needed.
 - **Install Redroid image**: loads or downloads the baked `damru-redroid:latest` image.
 - **Install native viewer**: installs/checks optional `scrcpy` tooling.
 
@@ -76,7 +76,7 @@ Per-worker actions:
 - **Viewer**: opens the selected worker in Work Lab viewer.
 - **Work**: selects the worker in Work Lab for browser actions.
 - **Fix internet**: repairs DNS/routing for that worker.
-- **Random profile**: applies a new random Android profile, timezone/locale, screen, Chrome settings, and rotates Chrome from the APK bundle when available.
+- **Random profile**: applies a new random Android profile, timezone/locale, screen, Chrome settings, and rotates Chrome plus matching WebView from the APK bundle when available.
 - **Stealth checker**: runs proof/stealth checks for that worker.
 - **Restart**: restarts the worker container.
 - **Stop**: pauses the worker container.
