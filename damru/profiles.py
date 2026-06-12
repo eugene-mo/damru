@@ -1,4 +1,4 @@
-"""Profile builder for damru.
+﻿"""Profile builder for damru.
 
 Assembles system props and Chrome CLI flags from a device profile
 + user options into a complete DamruProfile. Zero JS injection.
@@ -127,7 +127,7 @@ def _build_chrome_flags(
         f"--accept-lang={','.join(p.split(';')[0].strip() for p in accept_lang.split(','))}",
         # WebRTC: keep enabled but hide private IPs (match Chrome Preferences).
         # DO NOT use disable_non_proxied_udp — shows WebRTC as "disabled" (tell).
-        "--force-webrtc-ip-handling-policy=default_public_interface_only",
+        "--force-webrtc-ip-handling-policy=default_public_and_private_interfaces",
         "--enforce-webrtc-ip-permission-check",
         # Rendering
         "--force-color-profile=srgb",
@@ -150,6 +150,10 @@ def _build_chrome_flags(
         "--disable-battery-status-api",
         # Keep SpeechSynthesis path enabled on Android builds that gate it.
         "--enable-speech-synthesis-api",
+        # Enable Web APIs that real Chrome Android exposes.
+        # navigator.credentials, navigator.mediaDevices, navigator.bluetooth,
+        # navigator.usb, navigator.serial appear undefined otherwise.
+        "--enable-blink-features=WebUSB,WebSerial,Bluetooth,WebBluetooth,CredentialManager,MediaCapture",
         # Remove desktop-only GL extensions that SwiftShader exposes.
         # Only disable extensions that NEVER appear on real mobile GPUs.
         "--disable-gl-extensions=GL_ANGLE_polygon_mode",
@@ -162,6 +166,19 @@ def _build_chrome_flags(
     # This produces ~186 unique JA3 hashes from a single Chrome binary.
     tls_flags, tls_disabled = _randomize_tls_flags()
     flags.extend(tls_flags)
+
+    # Force the full user-agent string at native level so first Chrome
+    # page load already has correct platform (Linux armv8l) instead of
+    # the Redroid default. CDP overrides apply after page load, which
+    # leaves a detectable window where navigator.platform leaks.
+    # Chrome version placeholder ... is filled in during runtime.
+    import random
+    ua = (
+        'Mozilla/5.0 (Linux; Android ' + device.android_version + '; ' + device.model + ') '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/... Mobile Safari/537.36'
+    )
+    flags.append('--user-agent=' + ua)
 
     # Disabled features (collected into ONE flag - Chrome only reads the LAST one)
     # NOTE: DnsOverHttps is NOT disabled - we WANT DoH through the proxy

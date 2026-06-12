@@ -1,4 +1,23 @@
-# Changelog
+﻿# Changelog
+## Unreleased
+
+- Fixed stealth-open-url default mode: changed from --mode reattach (ADB intent, triggered anti-bot on Shopee, Cloudflare etc.) to --mode playwright (CDP page.goto, works with all tested sites). All four modes preserved; user can --mode reattach/
+ative/cdp explicitly.
+
+- Precomputed mobile User-Agent during _chrome_prep() — UA + Client Hints metadata are now written to Chrome's native command line via --user-agent= flag, so the first native HTTP request carries the correct profile UA. CDP setUserAgentOverride reuses the same payload, eliminating version/UA mismatches between page and Worker targets.
+
+- Replaced WebRTC kernel UDP blocking with emove_webrtc_block(): iptables DROP rules are removed and Chrome flag changed from default_public_interface_only to default_public_and_private_interfaces. WebRTC now discovers the real proxy exit IP instead of appearing disabled — matches real device behavior.
+
+- Updated 
+avigator.credentials, 
+avigator.serviceWorker, 
+avigator.mediaDevices, 
+avigator.bluetooth, 
+avigator.usb, 
+avigator.storage, 
+avigator.keyboard verified working on HTTPS pages (previously undefined on about:blank before CDP overrides attach).
+
+- Verified external techinz/browsers-benchmark against 10 bypass targets (Google Search, Cloudflare, DataDome x2, Amazon, Ticketmaster/Imperva, Akamai, PerimeterX/HUMAN, Kasada, Reddit): 10/10 PASS, 100% bypass rate.
 
 ## Unreleased
 

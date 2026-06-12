@@ -541,7 +541,13 @@ class AsyncDamru:
         # Chrome data or command-line flags during that restart: package/data
         # writes can succeed but Chrome later starts without a DevTools socket.
         await self._root.apply_cpu_cores_spoof(target_device.hardware_concurrency)
+        # Force cold start on warm Chrome if memory spoofing is active.
         await _memory_spoof()
+        # Force cold start if memory preload was just set up - wrap.* LD_PRELOAD
+        # only affects fresh Chrome processes, not already-running ones.
+        if warm_start and await self._root.is_memory_preload_active(self._chrome.package) and target_device.device_memory:
+            warm_start = False
+            logger.info('Cold start forced: memory spoof active for deviceMemory=%.0f GB', target_device.device_memory)
         await _gpu_then_battery()
         await _wait_adb_ready("GPU/battery setup", timeout=90.0)
         await _chrome_prep()
@@ -588,7 +594,7 @@ class AsyncDamru:
         async def _root_hardening() -> None:
             for label, factory in (
                 ("IPv6 block", self._root.apply_ipv6_block),
-                ("WebRTC block", lambda: self._root.apply_webrtc_block(self._chrome.package)),
+                ("WebRTC enable", lambda: self._root.remove_webrtc_block(self._chrome.package)),
             ):
                 last: Exception | None = None
                 for attempt in range(3):
@@ -810,8 +816,30 @@ class AsyncDamru:
                 await page.goto("about:blank", wait_until="load", timeout=5000)
                 touch_points = getattr(self, "_touch_points", None)
                 timezone = getattr(self, "_sync_timezone", None)
-                if touch_points or timezone:
-                    cdp = await self._context.new_cdp_session(page)  # type: ignore[union-attr]
+                ua_payload = getattr(self, "_sync_ua_payload", None)
+                screen_override = getattr(self, "_screen_override", None)
+                if ua_payload or touch_points or timezone or screen_override:
+                    cdp = await self._context.new_cdp_session(page)
+                    if ua_payload:
+                        await cdp.send("Emulation.setUserAgentOverride", ua_payload)
+                    target_cores = getattr(self, "_override_cores", None)
+                    target_memory = getattr(self, "_override_memory", None)
+                    if target_cores:
+                        await cdp.send("Emulation.setHardwareConcurrencyOverride", {"hardwareConcurrency": target_cores})
+                    # deviceMemory is handled via native memory preload (libfakemem.so), not CDP
+                    if screen_override:
+                        sw, sh, sdpi = screen_override
+                        dsf = max(1.0, sdpi / 160.0)
+                        try:
+                            await cdp.send("Emulation.setDeviceMetricsOverride", {
+                                "width": sw, "height": sh,
+                                "deviceScaleFactor": dsf,
+                                "mobile": True,
+                                "screenWidth": sw, "screenHeight": sh,
+                            })
+                        except Exception:
+                            pass
+
                     if touch_points:
                         await cdp.send("Emulation.setTouchEmulationEnabled", {
                             "enabled": True,
@@ -1360,6 +1388,7 @@ class AsyncDamru:
             "userAgentMetadata": ua_metadata,
         }
         self._sync_ua_payload = ua_payload
+        self._screen_override = device.screen_width, device.screen_height, device.density_dpi
 
         async def _apply_ua_cdp(p) -> None:
             try:

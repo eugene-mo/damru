@@ -1,4 +1,4 @@
-"""Command line interface for Damru."""
+﻿"""Command line interface for Damru."""
 from __future__ import annotations
 
 import argparse
@@ -2637,7 +2637,7 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
     async def _run_stealth() -> str:
         from .async_core import AsyncDamru
 
-        mode = str(getattr(args, "mode", "reattach") or "reattach").lower()
+        mode = str(getattr(args, "mode", "playwright") or "playwright").lower()
         if mode == "cdp" and os.environ.get("DAMRU_EXPERIMENTAL_RAW_WORKER_CDP") is None:
             os.environ["DAMRU_EXPERIMENTAL_RAW_WORKER_CDP"] = "1"
 
@@ -3130,7 +3130,7 @@ def build_parser() -> argparse.ArgumentParser:
     stealth_open_url.add_argument(
         "--mode",
         choices=("cdp", "reattach", "native", "playwright"),
-        default="reattach",
+        default="playwright",
         help="cdp keeps CDP live during native open; reattach detaches for native load then reconnects; native leaves CDP detached; playwright uses page.goto",
     )
     stealth_open_url.add_argument("--locale", default=None, help="explicit BCP-47 locale; .com.br URLs default to pt-BR when omitted")

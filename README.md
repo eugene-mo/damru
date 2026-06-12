@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
   <h1>Damru</h1>
   <p><strong>The Apex Predator of Android Browser Automation</strong></p>
@@ -121,7 +121,7 @@ The botting landscape is littered with tools that *used* to work: `puppeteer-ste
 | **Worker Stealth** | Workers often leak the real hardware concurrency of the host. | **Worker Interception**. Uses CDP `Target.setAutoAttach` to force overrides on all Threads/Workers. |
 | **TLS/JA3 Hash** | Fixed TLS fingerprint based on the Chrome binary version. | **TLS Randomization**. Produces ~184 unique JA3 hashes via dynamic cipher blacklisting. |
 | **Screen Dimensions** | Viewing desktop Chrome as mobile via viewport scaling (leaks real screen size). | **OS-Level Display**. Modifies Android `wm size/density` natively. |
-| **Network Identity** | Frequently leaks WebRTC private IPs and IPv6 fingerprints. | **OS-Level IP Tables**. Blocks WebRTC leaks and IPv6 at the Android kernel level. |
+| **Network Identity** | Frequently leaks WebRTC private IPs and IPv6 fingerprints. | **OS-Level IP Tables** + **CDP**. Blocks IPv6 at kernel level; WebRTC shows proxy exit IP naturally. |
 | **Mobile Emulation** | Desktop Chrome pretending to be mobile via viewport scaling. | **Real Android OS**. Runs inside Redroid (Android 14) or MuMu Player. It *is* mobile. |
 
 ### Proof of Stealth: Benchmark Comparisons
@@ -139,7 +139,7 @@ External benchmark proof: [docs/BROWSERS_BENCHMARK_REPORT.md](docs/BROWSERS_BENC
 - **Final browser benchmark score:** 10/10 bypass targets, **100%** bypass rate.
 - **Adapter code:** [scripts/run_browsers_benchmark_damru.py](scripts/run_browsers_benchmark_damru.py).
 - **Targets passed:** Google Search, Cloudflare, DataDome, Amazon, Ticketmaster/Imperva, Akamai, PerimeterX/HUMAN, Kasada, and Reddit.
-- **Browser data:** CreepJS completed without benchmark error, WebRTC candidate IP stayed blank by design, and IP check completed through the configured residential proxy.
+- **Browser data:** CreepJS completed without benchmark error, WebRTC discovers proxy exit IP naturally (no blocking), and IP check completed through the configured residential proxy.
 - **Manual reCAPTCHA proof:** Damru UI antcpt checks returned **reCAPTCHA v3 score 0.9** in both direct and proxy modes; publish screenshots only after redacting the visible IP.
 
 #### Screenshot Proof Gallery

@@ -101,7 +101,7 @@ class ChromeManager:
         await self.adb.shell(f"am force-stop {self.package}", allow_failure=True)
         await sleep(0.3)
 
-    async def write_command_line(self, flags: List[str]) -> None:
+    async def write_command_line(self, flags: List[str], user_agent: Optional[str] = None) -> None:
         """Write Chromium command-line flags for Chrome or WebView Shell.
 
         Chrome reads this file on startup. Format: first token is ignored (argv[0]),
@@ -134,6 +134,9 @@ class ChromeManager:
             final_flags.append("--remote-debugging-socket-name=chrome_devtools_remote")
         if disable_features:
             final_flags.append(f"--disable-features={','.join(disable_features)}")
+
+        if user_agent and not any(f.startswith('--user-agent=') for f in final_flags):
+            final_flags.append(f'--user-agent={user_agent}')
 
         # Android Chromium expects argv[0] to look like a browser binary name.
         # Some builds tolerate any placeholder, but Chrome 145 on Redroid only
@@ -647,3 +650,7 @@ class ChromeManager:
     async def webview_shell_installed(self, package: str = WEBVIEW_SHELL_PACKAGE) -> bool:
         out = await self.adb.shell(f"pm list packages {package}", timeout=8, allow_failure=True)
         return f"package:{package}" in out
+
+
+
+

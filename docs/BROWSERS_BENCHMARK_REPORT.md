@@ -1,4 +1,4 @@
-# Browsers Benchmark Report
+﻿# Browsers Benchmark Report
 
 This report records a Damru run against the external stealth benchmark project:
 
@@ -10,7 +10,7 @@ Adapter code used for Damru Redroid runs:
 
 [../scripts/run_browsers_benchmark_damru.py](../scripts/run_browsers_benchmark_damru.py)
 
-The benchmark was run with Damru Redroid on WSL2 Ubuntu using an Android 14 runtime, a Samsung Galaxy S23 profile, and a residential HTTP proxy. Proxy credentials, local paths, local usernames, and IP addresses are intentionally excluded from this report.
+The benchmark was run with Damru Redroid on WSL2 using Android 14 runtime, random premium profiles per target, and a rotating residential SOCKS5 proxy (USA exit). Proxy credentials, local paths, local usernames, and IP addresses are intentionally excluded from this report.
 
 ## Result
 
