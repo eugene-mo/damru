@@ -1999,30 +1999,25 @@ chmod 755 "$target"
                     return str(apk_root.resolve())
                 continue
 
+            # WebView matching is optional; system WebView works.
             matched_versions = [v for v in versions if find_matching_webview_apk(v, str(apk_root)) is not None]
 
             if version:
                 for v in versions:
                     if v.name == version:
-                        if v not in matched_versions:
-                            raise DamruError(
-                                f"Chrome version {version} is missing a matching WebView APK. "
-                                f"Place webview.apk or TrichromeWebView.apk inside {v}."
-                            )
-                        logger.info("Chrome APK: v%s", v.name)
+                        logger.info("Chrome APK: v%s (WebView %s)", v.name,
+                                    "matched" if v in matched_versions else "system")
                         return str(v.resolve())
                 raise DamruError(
                     f"Chrome version {version} not found. "
                     f"Available: {[v.name for v in versions]}"
                 )
 
-            auto_versions = [v for v in matched_versions if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
+            auto_versions = [v for v in versions if v.name not in _CHROME_APK_AUTO_SKIP_VERSIONS]
             if not auto_versions:
-                missing = [v.name for v in versions if v not in matched_versions]
-                raise DamruError(
-                    "No Chrome APK version has a matching WebView APK. "
-                    f"Missing matching WebView for: {missing}"
-                )
+                auto_versions = [v for v in versions]
+            if not auto_versions:
+                raise DamruError("No usable Chrome APK version found.")
 
             picked = _random.choice(auto_versions)
             logger.info(
