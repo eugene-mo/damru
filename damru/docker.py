@@ -2365,7 +2365,7 @@ chmod 755 "$target"
 
         Creates a custom image where every new container starts as "warm":
         Chrome is installed, FRE is dismissed, Preferences exist, fonts are
-        pushed, eSpeak is configured, ro.debuggable=1 is persistent.
+        pushed, eSpeak is configured, and production-like security props are set.
 
         This means has_preferences() = True on first boot → warm path always.
         No cold start ever — every session gets 10-15s setup.
@@ -2380,7 +2380,7 @@ chmod 755 "$target"
           7.  Configure eSpeak as default TTS engine
           8.  Backup original vulkan.pastel.so for GPU patching
           9.  Apply audio 48kHz fix
-          10. Set ro.debuggable=1 in build.prop (persistent)
+          10. Set production-like security props in build.prop (persistent)
           11. Launch Chrome → dismiss FRE → create Preferences
           12. Patch universal Preferences (DoH, WebRTC, DNS, etc.)
           13. docker commit → custom image
@@ -2538,26 +2538,26 @@ chmod 755 "$target"
             # Step 9: Apply audio 48kHz fix
             await root.apply_audio_48khz()
 
-            # Step 10: Set ro.debuggable=1 persistently in build.prop
+            # Step 10: Keep new Redroid containers close to retail Android at boot.
             # (resetprop is in-memory only — build.prop survives docker commit)
-            logger.info("Setting ro.debuggable=1 in build.prop (persistent)...")
+            logger.info("Setting production security props in build.prop (persistent)...")
             await adb.shell(
                 "su 0 mount -o remount,rw /system 2>/dev/null", allow_failure=True,
             )
-            dbg_check = await adb.shell(
-                "grep 'ro.debuggable=' /system/build.prop",
-                timeout=5, allow_failure=True,
-            )
-            if "ro.debuggable=1" not in dbg_check:
-                if "ro.debuggable=" in dbg_check:
-                    await adb.shell_root(
-                        "sed -i 's/ro.debuggable=0/ro.debuggable=1/' /system/build.prop",
-                    )
-                else:
-                    await adb.shell_root(
-                        "echo 'ro.debuggable=1' >> /system/build.prop",
-                    )
-                logger.info("ro.debuggable=1 set in build.prop")
+            for prop_key, prop_value in (
+                ("ro.debuggable", "0"),
+                ("ro.secure", "1"),
+                ("ro.adb.secure", "1"),
+                ("ro.build.type", "user"),
+            ):
+                prop_pattern = prop_key.replace(".", "[.]")
+                await adb.shell_root(
+                    "if grep -q '^%s=' /system/build.prop; then "
+                    "sed -i 's|^%s=.*|%s=%s|' /system/build.prop; "
+                    "else echo '%s=%s' >> /system/build.prop; fi"
+                    % (prop_pattern, prop_pattern, prop_key, prop_value, prop_key, prop_value)
+                )
+            logger.info("Security props persisted: ro.debuggable=0 ro.secure=1 ro.adb.secure=1 ro.build.type=user")
             await adb.shell(
                 "su 0 mount -o remount,ro /system 2>/dev/null", allow_failure=True,
             )

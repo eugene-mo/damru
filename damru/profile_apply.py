@@ -13,7 +13,7 @@ import random
 from .adb import ADB
 from .chrome import WEBVIEW_SHELL_PACKAGE, ChromeManager
 from .devices import get_device
-from .profiles import build_profile
+from .profiles import _build_chrome_flags, build_profile
 from .proxy import build_accept_language
 from .proxy_runtime import resolve_android_proxy
 from .root import RootOps
@@ -209,6 +209,7 @@ async def force_device_profile(
     if not clear_proxy:
         android_proxy = resolve_android_proxy(proxy, current_http_proxy, route_text=route_text)
 
+    requested_chrome_version = chrome_version
     profile = build_profile(
         device,
         proxy=proxy,
@@ -216,6 +217,7 @@ async def force_device_profile(
         android_proxy=android_proxy,
         timezone=timezone,
         locale=locale,
+        chrome_version=requested_chrome_version,
     )
     sensor_seed = hashlib.sha256(
         f"{device.model}|{profile.timezone}|{profile.locale}|{random.getrandbits(64)}".encode()
@@ -328,7 +330,7 @@ async def force_device_profile(
                 await root.setup_memory_preload(chrome.package)
         await chrome.force_stop()
         if rotate_chrome:
-            chrome_version = await _maybe_rotate_chrome(serial, chrome, version=chrome_version)
+            chrome_version = await _maybe_rotate_chrome(serial, chrome, version=requested_chrome_version)
             chrome_note = f"chrome={chrome_version}"
             await chrome.force_stop()
             if clear_chrome:
@@ -339,6 +341,12 @@ async def force_device_profile(
             chrome_note = f"{label}={chrome_version or 'kept'}"
             if clear_chrome:
                 await chrome.clear_all_data()
+        profile.chrome_flags = _build_chrome_flags(
+            device,
+            profile.timezone,
+            profile.locale,
+            chrome_version,
+        )
         accept_lang = build_accept_language(profile.locale)
         await asyncio.gather(
             chrome.write_command_line(
