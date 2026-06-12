@@ -2542,7 +2542,9 @@ chmod 755 "$target"
             for prop_key, prop_value in (
                 ("ro.debuggable", "0"),
                 ("ro.secure", "1"),
-                ("ro.adb.secure", "1"),
+                # Keep fresh workers ADB-connectable; runtime setup hardens
+                # ro.adb.secure before browser navigation.
+                ("ro.adb.secure", "0"),
                 ("ro.build.type", "user"),
             ):
                 prop_pattern = prop_key.replace(".", "[.]")
@@ -2552,7 +2554,7 @@ chmod 755 "$target"
                     "else echo '%s=%s' >> /system/build.prop; fi"
                     % (prop_pattern, prop_pattern, prop_key, prop_value, prop_key, prop_value)
                 )
-            logger.info("Security props persisted: ro.debuggable=0 ro.secure=1 ro.adb.secure=1 ro.build.type=user")
+            logger.info("Security props persisted: ro.debuggable=0 ro.secure=1 ro.adb.secure=0 ro.build.type=user")
             await adb.shell(
                 "su 0 mount -o remount,ro /system 2>/dev/null", allow_failure=True,
             )
