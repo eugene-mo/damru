@@ -2937,6 +2937,14 @@ chmod 755 "$target"
                 except Exception:
                     pass
 
+            # Stop the container before commit to ensure OverlayFS is synced and clean
+            logger.info("Stopping container before commit to ensure clean OverlayFS snapshot...")
+            await self._run_cmd(
+                self._docker_cmd("stop", temp_name),
+                timeout=60,
+                allow_failure=True,
+            )
+
             # Step 13: docker commit → custom image
             logger.info("Committing image as %s (this may take a minute)...", image_name)
             await self._run_cmd(

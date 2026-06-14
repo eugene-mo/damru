@@ -26,6 +26,7 @@ damru/proxy_bridge.py
 damru/proxy_runtime.py
 damru/root.py
 damru/utils.py
+damru/webview_native_patch.py
 damru.egg-info/PKG-INFO
 damru.egg-info/SOURCES.txt
 damru.egg-info/dependency_links.txt
@@ -101,6 +102,7 @@ tests/test_pool_auto.py
 tests/test_preflight_cli.py
 tests/test_profile_apply.py
 tests/test_profile_proxy_geo.py
+tests/test_root_app_data_dirs.py
 tests/test_root_locale.py
 tests/test_root_webrtc.py
 tests/test_screen_sites.py
@@ -114,4 +116,5 @@ tests/test_todetect_solo.py
 tests/test_tts_fix.py
 tests/test_ui_proxy_commands.py
 tests/test_vpn_debug.py
+tests/test_webview_native_patch.py
 tests/test_worker_debug.py
