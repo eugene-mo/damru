@@ -680,9 +680,13 @@ Open the printed `http://127.0.0.1:<port>` URL. The UI is local-only by default 
 
 Full UI documentation with every page screenshot is in [docs/UI.md](docs/UI.md).
 
-| Dashboard | Workers |
-| :---: | :---: |
-| <img src="docs/assets/ui/dashboard.png" alt="Damru UI dashboard" width="420"> | <img src="docs/assets/ui/workers.png" alt="Damru UI workers page" width="420"> |
+| Dashboard |
+| :---: |
+| <img src="docs/assets/ui/dashboard.png" alt="Damru UI dashboard" width="620"> |
+
+| Workers |
+| :---: |
+| <img src="docs/assets/ui/workers.png" alt="Damru UI workers page" width="620"> |
 
 | Work Lab |
 | :---: |
