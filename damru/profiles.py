@@ -38,7 +38,7 @@ def build_profile(
     timezone: Optional[str] = None,
     locale: Optional[str] = None,
     chrome_version: Optional[str] = None,
-    webrtc_block: bool = False,
+    webrtc_block: bool = True,
 ) -> DamruProfile:
     """Build a complete spoofing profile for the given device.
 
@@ -102,7 +102,7 @@ def _build_chrome_flags(
     timezone: str,
     locale: str,
     chrome_version: Optional[str] = None,
-    webrtc_block: bool = False,
+    webrtc_block: bool = True,
 ) -> List[str]:
     """Assemble Chrome command-line flags.
 

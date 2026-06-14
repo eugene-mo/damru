@@ -427,6 +427,7 @@ async def test_force_device_profile_webrtc_block_option() -> None:
         proxy="socks5://1.2.3.4:5678",
         timezone="America/New_York",
         locale="en-US",
+        webrtc_block=False,
     )
     assert not any(call[0] == "root.webrtc" for call in FakeRootOps.calls)
     assert any("disable_non_proxied_udp" in flag for flag in next(c for c in FakeChromeManager.calls if c[0] == "chrome.flags")[1])
@@ -441,7 +442,6 @@ async def test_force_device_profile_webrtc_block_option() -> None:
         proxy="socks5://1.2.3.4:5678",
         timezone="America/New_York",
         locale="en-US",
-        webrtc_block=True,
     )
     assert ("root.webrtc", "com.android.chrome") in FakeRootOps.calls
     assert any("default_public_and_private_interfaces" in flag for flag in next(c for c in FakeChromeManager.calls if c[0] == "chrome.flags")[1])

@@ -84,7 +84,7 @@ class AsyncDamru:
         keep_chrome_on_exit: bool = False,
         force_cold_start: bool = False,
         debug: bool = False,
-        webrtc_block: bool = False,
+        webrtc_block: bool = True,
     ):
         self._device_name = device
         self._serial = serial

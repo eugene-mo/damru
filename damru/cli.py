@@ -25,7 +25,7 @@ from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_b
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines, wsl_runtime_network_repair_script
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
-_DAMRU_IMAGE_SHA256 = "55dcf677c2fd155ff9c8059e018d507a3440e93121fd5fa3378f98dc721db8ef"  # Set to the new baked image checksum
+_DAMRU_IMAGE_SHA256 = "f5c1a32adfb16b2819a22b524d4f22b2563d902cf725023e3de5606746c1b9aa"  # Set to the new baked image checksum
 _DAMRU_IMAGE_URL = "https://github.com/akwin1234/damru/releases/download/v1.2-beta/damru-redroid-latest.tar"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
 _DAMRU_APKS_URL = "https://damru.dev/assets/chrome-apks.zip"
@@ -2210,7 +2210,7 @@ def _random_profile(args: argparse.Namespace) -> int:
         current_http_proxy = (current_http_proxy or "").strip()
         if current_http_proxy in {"", "null", ":0"}:
             current_http_proxy = None
-        webrtc_block = getattr(args, "webrtc_block", False)
+        webrtc_block = not getattr(args, "webrtc_spoof", False)
         profile = build_profile(
             device,
             proxy=explicit_proxy,
@@ -2328,7 +2328,7 @@ def _force_profile(args: argparse.Namespace) -> int:
             apply_gpu=not getattr(args, "no_gpu", False),
             apply_memory=not getattr(args, "no_memory", False),
             clear_proxy=getattr(args, "clear_proxy", False),
-            webrtc_block=getattr(args, "webrtc_block", False),
+            webrtc_block=not getattr(args, "webrtc_spoof", False),
         )
 
     try:
@@ -2531,7 +2531,7 @@ def _open_url(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"Proxy setup failed: {exc}", file=sys.stderr)
         return 1
-    webrtc_block = getattr(args, "webrtc_block", False)
+    webrtc_block = not getattr(args, "webrtc_spoof", False)
     if system_proxy and webrtc_block:
         try:
             _apply_webrtc_block_sync(serial, package)
@@ -2647,7 +2647,7 @@ def _stealth_open_url(args: argparse.Namespace) -> int:
             keep_chrome_on_exit=True,
             force_cold_start=bool(getattr(args, "cold_start", False)),
             debug=getattr(args, "debug", False),
-            webrtc_block=getattr(args, "webrtc_block", False),
+            webrtc_block=not getattr(args, "webrtc_spoof", False),
         )
         context = await damru.__aenter__()
         try:
@@ -3065,7 +3065,7 @@ def build_parser() -> argparse.ArgumentParser:
     random_profile.add_argument("--proxy", default=None, help="proxy URL used for geo/timezone/locale and Android HTTP proxy")
     random_profile.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
     random_profile.add_argument("--chrome-version", default=None, help="force a Chrome/WebView APK version from chrome-apks/<version>; default is random")
-    random_profile.add_argument("--webrtc-block", action="store_true", help="block all UDP outgoing from Chrome (defaults to spoofing WebRTC through proxy)")
+    random_profile.add_argument("--webrtc-spoof", action="store_true", help="spoof WebRTC IP through proxy instead of dropping UDP at kernel level (webrtc_block=True by default)")
     random_profile.set_defaults(func=_random_profile)
 
     force_profile = sub.add_parser("force-profile", help="apply a named stealth profile to an ADB worker")
@@ -3088,7 +3088,7 @@ def build_parser() -> argparse.ArgumentParser:
     force_profile.add_argument("--no-gpu", action="store_true", help="skip native Vulkan GPU spoofing")
     force_profile.add_argument("--no-memory", action="store_true", help="skip native memory preload spoofing")
     force_profile.add_argument("--clear-proxy", action="store_true", help="clear Android system HTTP proxy instead of preserving it")
-    force_profile.add_argument("--webrtc-block", action="store_true", help="block all UDP outgoing from Chrome (defaults to spoofing WebRTC through proxy)")
+    force_profile.add_argument("--webrtc-spoof", action="store_true", help="spoof WebRTC IP through proxy instead of dropping UDP at kernel level (webrtc_block=True by default)")
     force_profile.set_defaults(func=_force_profile)
 
     stealth_all = sub.add_parser("ui-stealth-check-all", help=argparse.SUPPRESS)
@@ -3112,7 +3112,7 @@ def build_parser() -> argparse.ArgumentParser:
     open_url.add_argument("--package", default="com.android.chrome", help="browser package to launch; default is Chrome")
     open_url.add_argument("--proxy", default=None, help="HTTP/SOCKS proxy URL; HTTP endpoint is applied to Android before navigation")
     open_url.add_argument("--http-proxy", default=None, help="explicit Android HTTP proxy host:port or URL")
-    open_url.add_argument("--webrtc-block", action="store_true", help="block all UDP outgoing from Chrome (defaults to spoofing WebRTC through proxy)")
+    open_url.add_argument("--webrtc-spoof", action="store_true", help="spoof WebRTC IP through proxy instead of dropping UDP at kernel level (webrtc_block=True by default)")
     open_url.set_defaults(func=_open_url)
 
     stealth_open_url = sub.add_parser("stealth-open-url", help="open a URL through a full Damru stealth session")
@@ -3139,7 +3139,7 @@ def build_parser() -> argparse.ArgumentParser:
     stealth_open_url.set_defaults(cold_start=False)
     stealth_open_url.add_argument("--settle-ms", type=int, default=3000, help="milliseconds to wait after navigation before leaving Chrome open")
     stealth_open_url.add_argument("--debug", action="store_true", help="enable debug logging")
-    stealth_open_url.add_argument("--webrtc-block", action="store_true", help="block all UDP outgoing from Chrome (defaults to spoofing WebRTC through proxy)")
+    stealth_open_url.add_argument("--webrtc-spoof", action="store_true", help="spoof WebRTC IP through proxy instead of dropping UDP at kernel level (webrtc_block=True by default)")
     stealth_open_url.set_defaults(func=_stealth_open_url)
 
     record = sub.add_parser("record", help="record a short MP4 video from an ADB device")

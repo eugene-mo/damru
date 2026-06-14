@@ -178,7 +178,7 @@ async def force_device_profile(
     apply_proc_preload: bool = False,
     clear_proxy: bool = False,
     slot_identity_seed: str | None = None,
-    webrtc_block: bool = False,
+    webrtc_block: bool = True,
 ) -> AppliedDeviceProfile:
     """Force a named Damru profile onto an existing rooted ADB worker.
 
