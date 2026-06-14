@@ -25,7 +25,7 @@ from .apk_assets import bundled_magisk_apk, find_apk_bundle_root, validate_apk_b
 from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines, wsl_runtime_network_repair_script
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
-_DAMRU_IMAGE_SHA256 = ""  # Set to empty; checksums verified per-download, not against a hardcoded constant
+_DAMRU_IMAGE_SHA256 = "55dcf677c2fd155ff9c8059e018d507a3440e93121fd5fa3378f98dc721db8ef"  # Set to the new baked image checksum
 _DAMRU_IMAGE_URL = "https://damru.dev/assets/damru-baked.tar.gz"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
 _DAMRU_APKS_URL = "https://damru.dev/assets/chrome-apks.zip"
