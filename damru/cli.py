@@ -2256,6 +2256,13 @@ def _random_profile(args: argparse.Namespace) -> int:
         await adb.shell(f"wm size {profile.screen_width}x{profile.screen_height}", allow_failure=True)
         await adb.shell(f"wm density {profile.density_dpi}", allow_failure=True)
         accept_lang = build_accept_language(profile.locale)
+        from .profiles import _build_chrome_flags
+        profile.chrome_flags = _build_chrome_flags(
+            device,
+            profile.timezone,
+            profile.locale,
+            installed_chrome or current_chrome,
+        )
         await chrome.write_command_line(profile.chrome_flags)
         await chrome.patch_preferences(profile.locale, accept_lang)
         from .chrome import WEBVIEW_SHELL_PACKAGE
