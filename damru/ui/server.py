@@ -1079,9 +1079,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def run_ui(port: int = DEFAULT_PORT, open_browser: bool = True) -> int:
-    server = ThreadingHTTPServer((HOST, port), Handler)
-    url = f"http://{HOST}:{port}/"
+def run_ui(host: str = "127.0.0.1", port: int = DEFAULT_PORT, open_browser: bool = True) -> int:
+    server = ThreadingHTTPServer((host, port), Handler)
+    url = f"http://{host}:{port}/"
     print(f"Damru UI running at {url}")
     print("Press Ctrl+C to stop.")
     if open_browser:
@@ -1097,7 +1097,8 @@ def run_ui(port: int = DEFAULT_PORT, open_browser: bool = True) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m damru ui", description="Run the local Damru web UI")
+    parser.add_argument("--host", default="127.0.0.1", help="host to bind the server to")
     parser.add_argument("--port", type=int, default=int(os.environ.get("DAMRU_UI_PORT", DEFAULT_PORT)))
     parser.add_argument("--no-open", action="store_true", help="do not open a browser automatically")
     args = parser.parse_args(argv)
-    return run_ui(port=args.port, open_browser=not args.no_open)
+    return run_ui(host=args.host, port=args.port, open_browser=not args.no_open)

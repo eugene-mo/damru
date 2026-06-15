@@ -3168,6 +3168,7 @@ def build_parser() -> argparse.ArgumentParser:
     viewer.set_defaults(func=_install_viewer)
 
     ui = sub.add_parser("ui", help="open the local Damru web control panel")
+    ui.add_argument("--host", default="127.0.0.1", help="host address to bind the UI server to")
     ui.add_argument("--port", type=int, default=8765, help="localhost port for the UI")
     ui.add_argument("--no-open", action="store_true", help="do not open a browser automatically")
     ui.set_defaults(func=_ui)
@@ -3190,7 +3191,7 @@ def main(argv: list[str] | None = None) -> int:
 def _ui(args: argparse.Namespace) -> int:
     from .ui.server import run_ui
 
-    return run_ui(port=args.port, open_browser=not args.no_open)
+    return run_ui(host=args.host, port=args.port, open_browser=not args.no_open)
 
 
 def _ui_worker(args: argparse.Namespace) -> int:
