@@ -63,7 +63,7 @@ def candidate_apk_bundle_roots(explicit_chrome_apk: Optional[str] = None) -> lis
 
     pkg = _package_root()
     cwd = Path.cwd()
-    for root in (cwd, cwd.parent, pkg, pkg.parent, pkg.parent.parent, Path.home()):
+    for root in (cwd, cwd.parent, pkg, pkg.parent, pkg.parent.parent, Path.home(), Path.home() / "Downloads", Path.home() / "Downloads" / "damru"):
         candidates.append(root / "chrome-apks")
     candidates.append(Path("/home/damru/chrome-apks"))
 

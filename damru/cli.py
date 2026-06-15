@@ -1994,7 +1994,7 @@ def _candidate_apk_zips(explicit: str | None = None) -> list[Path]:
     candidates: list[Path] = []
     if explicit:
         candidates.append(Path(explicit).expanduser())
-    for root in (Path.cwd(), Path.cwd().parent, _repo_root(), _repo_root().parent, Path.home(), Path.home() / "Downloads"):
+    for root in (Path.cwd(), Path.cwd().parent, _repo_root(), _repo_root().parent, Path.home(), Path.home() / "Downloads", Path.home() / "Downloads" / "damru"):
         for name in names:
             candidates.append(root / name)
     seen: set[str] = set()
