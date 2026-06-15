@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=64", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "damru"
@@ -24,14 +24,8 @@ dev = ["pytest", "pytest-asyncio", "aiohttp"]
 damru = "damru.cli:main"
 damru-benchmark = "damru.benchmark:main"
 
-[tool.setuptools.packages.find]
-include = ["damru*"]
-
-[tool.setuptools.package-data]
-"damru.playwright_patch" = ["*.js"]
-"damru.wsl_kernel" = ["wsl2-kernel-*", "*.config", "SHA256SUMS", "README.md", "source_metadata/*"]
-"damru.assets" = ["magisk.apk", "libfakemem.c"]
-"damru.ui" = ["static/*"]
+[tool.hatch.build.targets.wheel]
+packages = ["damru"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
