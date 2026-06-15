@@ -2786,7 +2786,7 @@ def _quick_stealth_check(args: argparse.Namespace) -> int:
     checks = {
         "adb_online": _run_adb_text(serial, "get-state", timeout=8).stdout.strip() == "device",
         "boot_completed": prop("sys.boot_completed") == "1",
-        "chrome_installed": _chrome_package_installed(serial, "com.android.chrome"),
+        "chrome_installed": _chrome_package_installed(serial, "com.android.chrome") or _chrome_package_installed(serial, "com.android.chromium"),
         "dns_present": _android_dns_present(serial),
         "timezone_present": bool(prop("persist.sys.timezone")),
         "locale_present": bool(prop("persist.sys.locale") or prop("persist.sys.language")),

@@ -173,6 +173,16 @@ def config_backups() -> list[dict[str, Any]]:
         if path.is_file()
     ]
 
+def _reload_config_module() -> None:
+    import importlib
+    import sys
+    for name in list(sys.modules.keys()):
+        if name.endswith("damru.config"):
+            try:
+                importlib.reload(sys.modules[name])
+            except Exception:
+                pass
+
 def restore_config_backup(name: str | None = None) -> Path:
     target = cli._config_path()
     backups = config_backups()
@@ -191,6 +201,7 @@ def restore_config_backup(name: str | None = None) -> Path:
     if selected.parent.resolve() != target.parent.resolve() or not selected.name.startswith(target.name + ".ui-backup-"):
         raise ValueError("Invalid config backup path")
     shutil.copy2(selected, target)
+    _reload_config_module()
     return selected
 
 
@@ -217,7 +228,9 @@ def safe_write_config(updates: dict[str, Any]) -> Path:
         clean[key] = value
     if not clean:
         raise ValueError("No supported config keys were provided")
-    return cli._write_config(clean)
+    res = cli._write_config(clean)
+    _reload_config_module()
+    return res
 
 
 @dataclass
@@ -578,8 +591,6 @@ def _linux_adb_devices() -> list[dict[str, str]]:
 
 def adb_devices(workers: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
     def _probe() -> list[dict[str, str]]:
-        if cli._is_windows():
-            return _linux_adb_devices()
         try:
             return parse_adb_devices(cli._adb_devices_text())
         except Exception:
@@ -587,6 +598,12 @@ def adb_devices(workers: list[dict[str, Any]] | None = None) -> list[dict[str, s
 
     devices = cached_value("adb-devices", 15.0, _probe)
     if not cli._is_windows():
+        return devices
+    try:
+        from ..config import MODE
+    except Exception:
+        MODE = "auto"
+    if MODE not in ("auto", "docker"):
         return devices
     try:
         from ..config import REDROID_BASE_PORT
