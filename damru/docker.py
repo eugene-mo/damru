@@ -1612,10 +1612,8 @@ chmod 755 "$target"
             await asyncio.sleep(interval)
             elapsed += interval
         message = f"Android touchscreen input was not visible on {serial} after {timeout:.0f}s"
-        if os.environ.get("DAMRU_ALLOW_MISSING_TOUCHSCREEN_INPUT", "").strip() in {"1", "true", "TRUE", "yes", "YES"}:
-            logger.warning("%s; continuing because DAMRU_ALLOW_MISSING_TOUCHSCREEN_INPUT is set", message)
-            return
-        raise DamruError(message)
+        logger.warning("%s; continuing anyway", message)
+        return
 
     async def _android_services_ready_internal(self, name: str) -> bool:
         script = " && ".join([

@@ -1997,6 +1997,7 @@ def _candidate_apk_zips(explicit: str | None = None) -> list[Path]:
     for root in (Path.cwd(), Path.cwd().parent, _repo_root(), _repo_root().parent, Path.home(), Path.home() / "Downloads", Path.home() / "Downloads" / "damru"):
         for name in names:
             candidates.append(root / name)
+            candidates.append(root / "chrome-apks" / name)
     seen: set[str] = set()
     unique: list[Path] = []
     for path in candidates:
