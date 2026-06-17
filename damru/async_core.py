@@ -618,12 +618,20 @@ class AsyncDamru:
             logger.warning("Devtools socket not detected after retries, attempting connection anyway")
 
         async def _root_hardening() -> None:
-            webrtc_label = "WebRTC block" if self._webrtc_block else "WebRTC enable"
-            webrtc_factory = (
-                (lambda: self._root.apply_webrtc_block(self._chrome.package))
-                if self._webrtc_block
-                else (lambda: self._root.remove_webrtc_block(self._chrome.package))
-            )
+            # WebRTC: ALWAYS apply the kernel-level UDP block (0-JS, undetectable,
+            # leak-proof). Spoof mode (webrtc_block=False) previously removed the
+            # block, which exposed the host's real public IP via the WebRTC srflx
+            # candidate (the native --force-webrtc-ip-handling-policy flag does
+            # NOT stop STUN UDP on this setup). The block is only removed when the
+            # user explicitly opts into the legacy JS candidate-rewrite spoof
+            # (DAMRU_WEBRTC_JS_SPOOF=1), which needs real candidates to rewrite.
+            _js_spoof = (not self._webrtc_block) and os.environ.get("DAMRU_WEBRTC_JS_SPOOF") == "1"
+            if _js_spoof:
+                webrtc_label = "WebRTC enable (legacy JS spoof opt-in)"
+                webrtc_factory = lambda: self._root.remove_webrtc_block(self._chrome.package)
+            else:
+                webrtc_label = "WebRTC block (kernel UDP drop)"
+                webrtc_factory = lambda: self._root.apply_webrtc_block(self._chrome.package)
             for label, factory in (
                 ("IPv6 block", self._root.apply_ipv6_block),
                 (webrtc_label, webrtc_factory),
@@ -660,8 +668,20 @@ class AsyncDamru:
                     logger.warning("GPU spoof cleanup on connect failure: %s", e)
             raise
 
-        # WebRTC IP Spoofing
-        if not self._webrtc_block and (self._proxy or (self._profile and self._profile.android_http_proxy)):
+        # WebRTC IP Spoofing (legacy JS override) — OFF by default.
+        # The JS RTCPeerConnection subclass below is itself a detectable
+        # non-native tell (RTCPeerConnection.toString() != "[native code]")
+        # and injected the public proxy IP as a "typ host" candidate that
+        # mismatched the HTTP exit IP — exactly the spoof-mode leak Fingerprint
+        # Pro caught. Default spoof mode (webrtc_block=False) now relies purely
+        # on native Chrome flags: --force-webrtc-ip-handling-policy=
+        # disable_non_proxied_udp prevents the public-IP (srflx) leak, and mDNS
+        # local-IP hiding (WebRtcHideLocalIpsWithMdns enabled) keeps host
+        # candidates as ".local", matching real Android Chrome with zero JS.
+        # Set DAMRU_WEBRTC_JS_SPOOF=1 to restore the old JS-injection behavior.
+        _webrtc_js_spoof = os.environ.get("DAMRU_WEBRTC_JS_SPOOF") == "1"
+        if (not self._webrtc_block and _webrtc_js_spoof
+                and (self._proxy or (self._profile and self._profile.android_http_proxy))):
             proxy_url = self._proxy or (self._profile and self._profile.android_http_proxy)
             try:
                 from .proxy import resolve_proxy_geo
@@ -993,10 +1013,12 @@ class AsyncDamru:
         try:
             page = await self._context.new_page()
             data = None
+            # ip-api.com first: MaxMind-derived timezone aligns with the IP→tz
+            # lookup detectors use, minimizing "VPN timezone mismatch" flags.
             for url in (
-                "https://ipapi.co/json/",
-                "https://ipinfo.io/json",
                 "http://ip-api.com/json/?fields=status,query,timezone,countryCode",
+                "https://ipinfo.io/json",
+                "https://ipapi.co/json/",
             ):
                 try:
                     await page.goto(url, wait_until="domcontentloaded", timeout=30000)

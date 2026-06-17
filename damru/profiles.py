@@ -190,9 +190,13 @@ def _build_chrome_flags(
     # Disabled features (collected into ONE flag - Chrome only reads the LAST one)
     # NOTE: DnsOverHttps is NOT disabled - we WANT DoH through the proxy
     # to prevent DNS leak detection by BrowserScan.
+    # NOTE: WebRtcHideLocalIpsWithMdns must stay ENABLED (do NOT disable it).
+    # Real Android Chrome hides local IPs behind mDNS ".local" host candidates.
+    # Disabling it exposed the raw private IP via WebRTC (a fingerprint tell) and
+    # was only needed by the old JS candidate-rewrite spoof, which is now off by
+    # default. Keeping mDNS on makes spoof mode match real devices natively.
     disabled_features = [
         "BatteryStatus",
-        "WebRtcHideLocalIpsWithMdns",
         "PaintHolding",
     ]
     disabled_features.extend(tls_disabled)
