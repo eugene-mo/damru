@@ -1,5 +1,9 @@
 # Native Binaries (`native/`)
 
+> Part of **Damru** — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) — C-level Vulkan/GLES binary patching and syscall hooks for browser fingerprinting research.
+
+*C-level native binaries for the open-source undetected-chromedriver alternative.*
+
 Welcome to the deepest layer of Damru's stealth architecture. This folder contains the **C source code and compiled shared objects (`.so`)** used for **Layer 2 (Binary)** spoofing.
 
 > **Why native patching?**
@@ -23,3 +27,14 @@ Welcome to the deepest layer of Damru's stealth architecture. This folder contai
 *   **Instant Boot Deployment**: If you use the pre-baked [damru-baked.tar.gz](https://damru.dev/assets/damru-baked.tar.gz) OS image, these binaries are *already injected permanently* into the OS, drastically speeding up boot times and reducing runtime points of failure.
 
 *For instructions on modifying and recompiling these binaries using the NDK, see the inline comments within the `.c` source files.*
+
+---
+
+## Related
+
+- [Main README](../README.md)
+- [Damru Core Library](../damru/README.md)
+- [Browser Benchmark Report](../docs/BROWSERS_BENCHMARK_REPORT.md)
+- [Android Virtualization Research](../research/android-virtualization-alternatives.md)
+
+<sub>Keywords: Android browser automation · stealth automation · antidetect · web scraping · Redroid · Playwright · CDP · fingerprinting research</sub>
