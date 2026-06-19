@@ -1,5 +1,9 @@
 #  Damru Python API Reference
 
+> Part of **Damru** — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.
+
+*Python API for browser automation and web scraping with Damru.*
+
 Welcome to the definitive API reference for the **Damru** library. This guide covers everything from basic automation to advanced multi-container orchestration and stealth tuning.
 
 Damru is designed to be a transparent drop-in replacement for standard Playwright setups, adding deep-level Android OS and Chromium C++ spoofing.
@@ -348,3 +352,14 @@ Leave `timezone` and `locale` unset unless you intentionally need fixed values. 
 *   **Main Dependencies**: `playwright>=1.40,<1.60`, `requests`, `pysocks`.
 *   **Playwright Patch**: Damru ships and verifies a patched `crPage.js` file used to reduce CDP/Runtime detection surface.
 *   **Stealth Add-ons**: `curl_cffi` (highly recommended for TLS spoofing).
+
+---
+
+## Related
+
+- [Main README](../README.md)
+- [Device Profiles](DEVICE_PROFILES.md)
+- [Local UI Guide](UI.md)
+- [Viewer, Screenshots, and Video](VIEWER.md)
+
+<sub>Keywords: Android browser automation · stealth automation · antidetect · web scraping · Redroid · Playwright · CDP · fingerprinting research</sub>

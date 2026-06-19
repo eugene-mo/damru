@@ -1,4 +1,9 @@
 # Changelog
+
+> Part of **Damru** — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.
+
+*Part of the Damru open-source browser automation project.*
+
 ## Unreleased
 
 - Fixed stealth-open-url default mode: changed from --mode reattach (ADB intent, triggered anti-bot on Shopee, Cloudflare etc.) to --mode playwright (CDP page.goto, works with all tested sites). All four modes preserved; user can --mode reattach/
@@ -139,3 +144,14 @@ avigator.keyboard verified working on HTTPS pages (previously undefined on about
 - Updated the build backend requirement so `pip install -e .` works in fresh developer clones.
 - Cleaned README encoding to avoid corrupted Unicode rendering.
 - Documented the Linux-only Redroid requirement and new CLI commands.
+
+---
+
+## Related
+
+- [Main README](README.md)
+- [Contributing Guide](CONTRIBUTING.md)
+- [Automation Status & Roadmap](docs/AUTOMATION_GAPS_PLAN.md)
+- [Verification Proof](docs/PROOF.md)
+
+<sub>Keywords: Android browser automation · stealth automation · antidetect · web scraping · Redroid · Playwright · CDP · fingerprinting research</sub>
