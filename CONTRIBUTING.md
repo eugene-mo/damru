@@ -8,7 +8,7 @@ Thank you for considering a contribution to Damru.
 
 ## AI-Assisted Development
 
-Damru was built with heavy AI-assisted engineering and rapid experimentation. The project has used OpenAI Codex, Claude Code, Kimi CLI, and other tools during research, native patching, and integration work.
+Damru was built with heavy AI-assisted engineering and rapid experimentation. The project has used OpenAI Codex, Kimi CLI, and other tools during research, native patching, and integration work.
 
 AI-generated patches are welcome, but contributors are responsible for testing, reviewing, and understanding the code before submitting it.
 
