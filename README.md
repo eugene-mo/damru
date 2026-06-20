@@ -82,11 +82,11 @@
 
 ## Related
 
-- [Python API Reference](docs/PYTHON_API.md)
-- [Device Profiles](docs/DEVICE_PROFILES.md)
-- [Verification Proof](docs/PROOF.md)
-- [WSL2 Kernel Notes](docs/WSL_KERNEL.md)
-- [Browser Benchmark Report](docs/BROWSERS_BENCHMARK_REPORT.md)
+- [Python API Reference](https://github.com/akwin1234/damru/wiki/Python-API-Guide)
+- [Device Profiles](https://github.com/akwin1234/damru/wiki/Android-Device-Profiles)
+- [Verification Proof](https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots)
+- [WSL2 Kernel Notes](https://github.com/akwin1234/damru/wiki/WSL2-Deployment-Guide)
+- [Browser Benchmark Report](https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots)
 
 <sub>Keywords: Android browser automation · stealth automation · antidetect · web scraping · Redroid · Playwright · CDP · fingerprinting research</sub>
 
@@ -95,14 +95,14 @@
 - [Core Features](#core-features)
 - [Why Damru is Better](#why-damru-is-better-than-the-rest)
 - [Proof of Stealth: Benchmarks](#proof-of-stealth-benchmark-comparisons)
-- [Verification Proof](docs/PROOF.md)
+- [Verification Proof](https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots)
 - [Architecture: The 8 Layers of Stealth](#architecture-the-8-layers-of-zero-js-stealth)
 - [Project Structure](#project-structure)
-- [Python API Documentation](docs/PYTHON_API.md)
-- [Device Profiles](docs/DEVICE_PROFILES.md)
-- [Viewer, Screenshots, and Video](docs/VIEWER.md)
-- [Local UI Guide](docs/UI.md)
-- [WSL2 Kernel Requirements](docs/WSL_KERNEL.md)
+- [Python API Documentation](https://github.com/akwin1234/damru/wiki/Python-API-Guide)
+- [Device Profiles](https://github.com/akwin1234/damru/wiki/Android-Device-Profiles)
+- [Viewer, Screenshots, and Video](https://github.com/akwin1234/damru/wiki/CLI-Command-Reference)
+- [Local UI Guide](https://github.com/akwin1234/damru/wiki/Quick-Start)
+- [WSL2 Kernel Requirements](https://github.com/akwin1234/damru/wiki/WSL2-Deployment-Guide)
 - [Download Custom OS Image](#download-custom-os-image)
 - [Quickstart Guide](#first-time-user-deployment-guide-wsl2--linux)
 - [Usage & Examples](#usage--examples)
@@ -178,13 +178,13 @@ The botting landscape is littered with tools that *used* to work: `puppeteer-ste
 
 We regularly test Damru against the hardest anti-bot systems in the industry. These results are reproducible using the built-in benchmark suite (`python -m damru benchmark`) or the comprehensive functional test suite (`python example.py`).
 
-Fresh Ubuntu/WSL verification proof is tracked in [docs/PROOF.md](docs/PROOF.md). The current sanitized Ubuntu VPS proof assets include:
+Fresh Ubuntu/WSL verification proof is tracked in [https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots](https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots). The current sanitized Ubuntu VPS proof assets include:
 
 - [Android screen recording](docs/assets/proof/ubuntu-redroid-proof.mp4)
 - Individual site proof screenshots: [Amazon](docs/assets/proof/sites/amazon.png), [Foot Locker / DataDome target](docs/assets/proof/sites/datadome-footlocker.png), [Fingerprint Pro](docs/assets/proof/sites/fingerprint-pro.png), [Sannysoft](docs/assets/proof/sites/sannysoft.png), and [CreepJS](docs/assets/proof/sites/creepjs.png)
 - [Sanitized site proof metadata](docs/assets/proof/sites/proof-sites.json)
 
-External benchmark proof: [docs/BROWSERS_BENCHMARK_REPORT.md](docs/BROWSERS_BENCHMARK_REPORT.md) records a sanitized Damru Redroid run against [`techinz/browsers-benchmark`](https://github.com/techinz/browsers-benchmark), with proxy credentials and IPs removed.
+External benchmark proof: [https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots](https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots) records a sanitized Damru Redroid run against [`techinz/browsers-benchmark`](https://github.com/techinz/browsers-benchmark), with proxy credentials and IPs removed.
 
 - **Final browser benchmark score:** 10/10 bypass targets, **100%** bypass rate.
 - **Adapter code:** [scripts/run_browsers_benchmark_damru.py](scripts/run_browsers_benchmark_damru.py).
@@ -278,11 +278,11 @@ damru-project/
 
 For detailed information on how to use the Damru library programmatically, including class references, managed pooling, and advanced configuration, please see the:
 
-**[Damru Python API Reference](docs/PYTHON_API.md)**
+**[Damru Python API Reference](https://github.com/akwin1234/damru/wiki/Python-API-Guide)**
 
 For the full list of available Android identities, see the:
 
-**[Damru Device Profile Reference](docs/DEVICE_PROFILES.md)**
+**[Damru Device Profile Reference](https://github.com/akwin1234/damru/wiki/Android-Device-Profiles)**
 
 Default `device="random"` and UI random-profile actions use the premium pool: 51 original verified profiles plus 49 high-confidence new profiles. Use an explicit `device=...` or `--profile-tier medium|experimental|all` only when you intentionally want wider lower-confidence diversity.
 
@@ -489,11 +489,11 @@ python -m damru check-env
 `install-deps` is idempotent: on a fresh Ubuntu WSL/Linux install it installs ADB, Docker, iptables, curl/wget/git/jq, mounts binderfs, and starts Docker. On later runs it reuses installed packages and rehydrates Docker/binderfs after WSL restarts.
 `install-image` loads the baked `damru-redroid:latest` image, which already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Users do not need to provide Chrome APKs unless they intentionally run an unbaked raw Redroid image.
 
-On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB through WSL. When Docker-published ADB ports are unreliable, Damru uses host networking and remaps each Redroid worker's `adbd` to a unique port (`5600`, `5601`, ...), so multi-worker pools can still run without native Windows Docker. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL prefers legacy iptables where available because some WSL kernels reject Docker's `addrtype` NAT rule through nft. See [WSL kernel notes](docs/WSL_KERNEL.md) and the latest [WSL fallback test results](docs/WSL_FALLBACK_TEST_RESULTS.md).
+On Windows/WSL2, Damru runs Docker and Redroid inside WSL and routes Redroid ADB through WSL. When Docker-published ADB ports are unreliable, Damru uses host networking and remaps each Redroid worker's `adbd` to a unique port (`5600`, `5601`, ...), so multi-worker pools can still run without native Windows Docker. Native Linux uses Docker bridge/NAT and Damru selects the nft iptables backend to match modern Docker daemons; WSL prefers legacy iptables where available because some WSL kernels reject Docker's `addrtype` NAT rule through nft. See [WSL kernel notes](https://github.com/akwin1234/damru/wiki/WSL2-Deployment-Guide) and the latest [WSL fallback test results](https://github.com/akwin1234/damru/wiki/WSL2-Deployment-Guide).
 
 Damru's WSL kernel installer also writes `dnsTunneling=true` and `networkingMode=NAT` into `%USERPROFILE%\.wslconfig`. This avoids a common WSL failure where the distro can ping public IPs but `apt`, `pip`, or Docker containers cannot resolve DNS names. Run `wsl --shutdown` after kernel/DNS changes, then reopen Ubuntu.
 
-Current validation on June 4, 2026. Full sanitized notes are in [Verification Proof](docs/PROOF.md):
+Current validation on June 4, 2026. Full sanitized notes are in [Verification Proof](https://github.com/akwin1234/damru/wiki/Bypassing-Anti-Bots):
 
 - Disposable Ubuntu WSL2 fresh-loop distro: `install-deps -y`, `install-image`, preflight, single-worker smoke, two-worker smoke, `quick-check`, and `open-url https://example.com` passed. The protected kernel-source WSL distro was not touched.
 - Native Ubuntu 24.04 VPS reset/current-tree loop: fresh venv, `install-deps -y`, preflight, two workers, `quick-check`, and `open-url https://example.com` passed.
@@ -622,7 +622,7 @@ If Docker still fails inside WSL, run the safe repair/diagnostic pass:
 python -m damru fix-wsl
 ```
 
-If it reports a missing kernel module such as `xt_addrtype`, the active WSL2 kernel lacks Docker bridge/NAT support. See [WSL2 Kernel Requirements](docs/WSL_KERNEL.md).
+If it reports a missing kernel module such as `xt_addrtype`, the active WSL2 kernel lacks Docker bridge/NAT support. See [WSL2 Kernel Requirements](https://github.com/akwin1234/damru/wiki/WSL2-Deployment-Guide).
 
 For scripted setup with a custom WSL distro/user, pass them explicitly:
 
@@ -714,7 +714,7 @@ printf '%s\n' 'your-sudo-password' | python -m damru setup -y --sudo-password-st
 printf '%s\n' 'your-sudo-password' | python -m damru install-deps -y --sudo-password-stdin
 ```
 
-For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](docs/VIEWER.md). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
+For visual inspection or manual browser operation, see [Viewer, Screenshots, and Video](https://github.com/akwin1234/damru/wiki/CLI-Command-Reference). Viewer support is optional and never starts automatically during `AsyncDamru`, `Damru`, or pool sessions.
 
 Use `stealth-open-url` when you want CLI/UI URL opening with Damru's full profile setup. The default `--mode reattach` path applies or reuses the selected profile, proxy, timezone, locale, WebRTC policy, TLS setup, and Chrome state, disconnects CDP for the protected navigation, opens the target URL through Android's native Chrome `VIEW` intent, then reconnects CDP so the loaded page can still be inspected or automated after load. It reuses existing Chrome/profile state by default for fast repeated opens; pass `--cold-start` when you need a fresh Chrome identity. Use `--mode cdp` when you need CDP-side overrides to stay live during the native open, `--mode native` when you want to leave CDP detached after opening, and `--mode playwright` only when you specifically want the raw Playwright `page.goto` path for debugging.
 
@@ -728,7 +728,7 @@ python -m damru ui
 
 Open the printed `http://127.0.0.1:<port>` URL. The UI is local-only by default and uses an allowlisted backend; it does not expose arbitrary shell execution. The dashboard shows WSL controls only on Windows and native Ubuntu controls on Linux. Good setup checks collapse by default so failures stay visible. Work Lab can open URLs through a full Damru stealth session, run quick stealth checks, capture screenshots, clear the gallery, repair internet, apply random profiles, and stream a browser viewer for the selected worker. UI URL navigation is slower than a raw Android `am start` because it applies proxy, timezone, locale, UA/client hints, GPU, hardware, WebRTC, and TLS setup before leaving Chrome visible for inspection. For smoother manual control, use **Copy native command** in Work Lab and paste it in a terminal to launch `scrcpy` for the selected worker.
 
-Full UI documentation with every page screenshot is in [docs/UI.md](docs/UI.md).
+Full UI documentation with every page screenshot is in [https://github.com/akwin1234/damru/wiki/Quick-Start](https://github.com/akwin1234/damru/wiki/Quick-Start).
 
 | Dashboard |
 | :---: |
@@ -1060,7 +1060,7 @@ python -m damru benchmark --device samsung_galaxy_s24_ultra --proxy socks5://ip:
 
 ## The "Big Plan" (Roadmap)
 
-We are aggressively building Damru into a fully autonomous infrastructure tool. Check `docs/AUTOMATION_GAPS_PLAN.md` for details.
+We are aggressively building Damru into a fully autonomous infrastructure tool. Check `https://github.com/akwin1234/damru/wiki/Troubleshooting-and-FAQ` for details.
 
 *   [x] **`damru setup` CLI**: Single-command configuration plus Linux/WSL dependency setup.
 *   [x] **Automated Health Checks**: Verification of ADB, Docker, binderfs, Chrome APKs, images, Playwright patches, resources, ports, and WSL kernel state.
