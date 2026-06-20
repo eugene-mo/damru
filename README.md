@@ -1,5 +1,3 @@
-> Part of **Damru** — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.
-> Damru is an open-source **undetected-chromedriver alternative** for **stealth browser automation** and **web scraping** — Android-native, built on Redroid + Playwright + CDP.
 
 <div align="center">
   <img src="logo.svg" alt="Damru Logo" width="200" height="200">
@@ -8,6 +6,8 @@
   <p><em>श्री शिवाय नमस्तुभ्यं</em></p>
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
+> Part of **Damru** — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.
+> Damru is an open-source **undetected-chromedriver alternative** for **stealth browser automation** and **web scraping** — Android-native, built on Redroid + Playwright + CDP.
 
   [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
   [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
