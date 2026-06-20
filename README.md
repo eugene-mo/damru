@@ -6,9 +6,8 @@
   <p><em>श्री शिवाय नमस्तुभ्यं</em></p>
   <p><em>The world's first open-source framework for natively modded Android browser automation.</em></p>
   <p>High-performance, ultra-stealth browser automation framework designed for web scraping and botting at scale.</p>
-> Part of **Damru** — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.
-> Damru is an open-source **undetected-chromedriver alternative** for **stealth browser automation** and **web scraping** — Android-native, built on Redroid + Playwright + CDP.
-
+<p>Part of <strong>Damru</strong> — the open-source, Android-native stealth browser automation framework (Redroid + Playwright + CDP) for web scraping, automation testing, and anti-bot / fingerprinting research.</p>
+<p>Damru is an open-source <strong>undetected-chromedriver alternative</strong> for <strong>stealth browser automation</strong> and <strong>web scraping</strong> — Android-native, built on Redroid + Playwright + CDP.</p>
   [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
   [![Playwright](https://img.shields.io/badge/playwright-1.40--1.59-green.svg?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/python/)
   [![Platform](https://img.shields.io/badge/Platform-Ubuntu%2024.04%20%7C%20WSL2-lightgrey.svg?style=for-the-badge&logo=ubuntu&logoColor=white)](#minimum-system-requirements)
