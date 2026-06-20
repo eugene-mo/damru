@@ -29,7 +29,7 @@
       <h3>Keep Damru Research Public</h3>
       <p><strong>Damru is built through expensive anti-detect research:</strong> AI credits, RAM-heavy Redroid rebuilds, proxy tests, benchmark runs, and long debugging loops.</p>
       <p>If Damru saves you hours or helps your research, a donation keeps new stealth fixes, APK rotation, WebView hardening, and proof tests moving.</p>
-      <a href="https://damru.dev/"><img src="https://img.shields.io/badge/Donate%20Now-Keep%20Damru%20Alive-ff6b2b?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Donate to Damru"></a>
+      <a href="https://damru.dev/donate/"><img src="https://img.shields.io/badge/Donate%20Now-Keep%20Damru%20Alive-ff6b2b?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Donate to Damru"></a>
     </td>
   </tr>
 </table>
@@ -1109,7 +1109,7 @@ Damru is not a wrapper around a normal browser. It is a native Android automatio
 If Damru helped you avoid days of setup, debugging, fingerprint leaks, or broken Android automation, please support the project:
 
 <div align="center">
-  <a href="https://damru.dev/"><img src="https://img.shields.io/badge/Donate%20to%20Damru-Fund%20the%20next%20stealth%20fix-ff6b2b?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Donate to Damru"></a>
+  <a href="https://damru.dev/donate/"><img src="https://img.shields.io/badge/Donate%20to%20Damru-Fund%20the%20next%20stealth%20fix-ff6b2b?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Donate to Damru"></a>
 </div>
 
 Your support helps keep the best research public instead of locked behind a private SaaS.
