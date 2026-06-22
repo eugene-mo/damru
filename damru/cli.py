@@ -3034,7 +3034,7 @@ def build_parser() -> argparse.ArgumentParser:
     install_image = sub.add_parser("install-image", help="load or download the baked Damru Redroid image")
     install_image.add_argument("--tar", default=None, help="path to damru-redroid-latest.tar; auto-detected when omitted")
     install_image.add_argument("--download", action="store_true", help="download the image tarball if it is not found locally")
-    install_image.add_argument("--url", default=_DAMRU_IMAGE_URL, help="Google Drive image URL used with --download")
+    install_image.add_argument("--url", default=_DAMRU_IMAGE_URL, help="direct HTTPS image URL used with --download (default: dl.damru.dev)")
     install_image.add_argument("--output", default=None, help="download target path; default is ./damru-redroid-latest.tar")
     install_image.set_defaults(func=_install_image)
 
