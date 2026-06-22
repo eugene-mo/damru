@@ -26,10 +26,10 @@ from .netfix import android_dns_repair_command, wsl_runtime_network_repair_lines
 
 _DAMRU_IMAGE_TAR = "damru-redroid-latest.tar"
 _DAMRU_IMAGE_SHA256 = "f5c1a32adfb16b2819a22b524d4f22b2563d902cf725023e3de5606746c1b9aa"  # Set to the new baked image checksum
-_DAMRU_IMAGE_URL = "https://damru.dev/assets/damru-baked.tar.gz"
+_DAMRU_IMAGE_URL = "https://dl.damru.dev/assets/damru-baked.tar.gz"
 _DAMRU_APKS_ZIP = "chrome-apks.zip"
-_DAMRU_APKS_URL = "https://damru.dev/assets/chrome-apks.zip"
-_DAMRU_APKS_MIRROR_URL = "https://damru.dev/assets/chrome-apks.zip"
+_DAMRU_APKS_URL = "https://dl.damru.dev/assets/chrome-apks.zip"
+_DAMRU_APKS_MIRROR_URL = "https://dl.damru.dev/assets/chrome-apks.zip"
 _CHROME_APK_AUTO_SKIP_VERSIONS: set[str] = set()
 
 

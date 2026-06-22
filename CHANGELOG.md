@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Hatchling Migration**: Migrated Python build-system backend to Hatchling from setup.py and untracked `damru.egg-info`.
-- **Base OS Image**: Changed default download URL for Redroid image to `https://damru.dev/assets/damru-baked.tar.gz`.
+- **Base OS Image**: Changed default download URL for Redroid image to `https://dl.damru.dev/assets/damru-baked.tar.gz`.
 
 ### Fixed
 - Cache issues with reloading configuration in UI, listing native devices in non-auto modes, and checking `com.android.chromium` package readiness.

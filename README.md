@@ -301,7 +301,7 @@ Default `device="random"` and UI random-profile actions use the premium pool: 51
 
 Download the current pre-baked image:
 
-**[Download damru-baked.tar.gz](https://damru.dev/assets/damru-baked.tar.gz)**
+**[Download damru-baked.tar.gz](https://dl.damru.dev/assets/damru-baked.tar.gz)**
 
 Current local artifact prepared for release testing:
 
@@ -330,7 +330,7 @@ Once downloaded, follow **Step 3** in the Deployment Guide below to load it into
 
 Normal users should prefer `python -m damru install-image`; the baked image already contains Chrome, WebView/TTS assets, fonts, and warm preferences. Use the raw APK bundle only when you want to bake your own image or run unbaked raw Redroid containers.
 
-APK bundle: [Chrome/WebView/TTS/resetprop APK assets](https://damru.dev/assets/chrome-apks.zip)
+APK bundle: [Chrome/WebView/TTS/resetprop APK assets](https://dl.damru.dev/assets/chrome-apks.zip)
 
 Automatic install:
 
@@ -814,7 +814,7 @@ Damru uses a centralized configuration file located at `damru/config.py`. If you
    python -m damru install-apks --download
    ```
 
-   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, validates the 143-148 Chrome split-APK folders, and configures `CHROME_APK` only when needed. The [APK bundle](https://damru.dev/assets/chrome-apks.zip) is for manual recovery if automatic download is unavailable.
+   It downloads the Chrome/WebView/TTS/resetprop APK bundle automatically, extracts to `/home/damru/chrome-apks` on Linux/WSL, validates the 143-148 Chrome split-APK folders, and configures `CHROME_APK` only when needed. The [APK bundle](https://dl.damru.dev/assets/chrome-apks.zip) is for manual recovery if automatic download is unavailable.
 
    If you still see an APK asset error, download the same Google Drive bundle manually, extract it as `/home/damru/chrome-apks`, keep the WebView/TTS/Magisk APKs beside the Chrome version folders, then set `CHROME_APK` to a Chrome split-APK version directory, for example:
 
