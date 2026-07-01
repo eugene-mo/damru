@@ -124,15 +124,17 @@ def proxy_bridge_upstream(proxy: str | None, http_proxy: str | None = None) -> s
 
 
 def _bridge_alive(port: int, *, root_user: bool) -> bool:
-    import socket
     vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
     if vm_ssh_host:
-        try:
-            with socket.create_connection((vm_ssh_host, port), timeout=1.0):
-                return True
-        except Exception:
-            return False
+        # Remote VM: check locally on the VM to bypass external firewall blocks
+        probe = linux_run(
+            f"timeout 1 bash -c '</dev/tcp/127.0.0.1/{port}' >/dev/null 2>&1",
+            timeout=5,
+            root_user=root_user,
+        )
+        return probe.returncode == 0
     else:
+        import socket
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=1.0):
                 return True
@@ -177,19 +179,39 @@ def ensure_proxy_bridge(upstream: str) -> int:
                 f"setsid -f /home/administrator/env/bin/python3 -m damru.proxy_bridge --config {shlex.quote(config_path)} "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
             )
+            wrapped_start = f"sudo {start_cmd}" if root_user else start_cmd
+            start = subprocess.run(
+                ["ssh", "-o", "StrictHostKeyChecking=no", f"administrator@{vm_ssh_host}", wrapped_start],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                errors="replace",
+            )
+        elif is_windows():
+            start_cmd = (
+                f"setsid -f python3 {shlex.quote(linux_script)} --config {shlex.quote(config_path)} "
+                f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
+            )
+            start = subprocess.run(
+                ["wsl", "-d", configured_wsl_distro(), "-u", "root", "--", "bash", "-lc", start_cmd],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                errors="replace",
+            )
         else:
             start_cmd = (
                 f"setsid -f python3 {shlex.quote(linux_script)} --config {shlex.quote(config_path)} "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
             )
-        start = linux_run(start_cmd, timeout=30, root_user=root_user)
+            start = linux_run(start_cmd, timeout=10, root_user=root_user)
         if start.returncode != 0:
             raise RuntimeError((start.stderr or start.stdout or "failed to start proxy bridge").strip())
         deadline = time.time() + 20
         while time.time() < deadline:
             if _bridge_alive(port, root_user=root_user):
                 break
-            time.sleep(0.25)
+            time.sleep(1.0 if vm_ssh_host else 0.25)
         else:
             raise RuntimeError("proxy bridge did not become ready")
     return port
