@@ -104,7 +104,7 @@ def _bridge_alive(port: int, *, root_user: bool) -> bool:
     try:
         probe = linux_run(
             f"timeout 2 bash -c '</dev/tcp/127.0.0.1/{port}' >/dev/null 2>&1",
-            timeout=8,
+            timeout=15,
             root_user=root_user,
         )
         return probe.returncode == 0
@@ -140,7 +140,7 @@ def ensure_proxy_bridge(upstream: str) -> int:
             f"printf %s {shlex.quote(config_b64)} | base64 -d > {shlex.quote(config_path)}; "
             f"chmod 600 {shlex.quote(config_path)}"
         )
-        write = linux_run(write_cmd, timeout=10, root_user=root_user)
+        write = linux_run(write_cmd, timeout=30, root_user=root_user)
         if write.returncode != 0:
             raise RuntimeError((write.stderr or write.stdout or "failed to write proxy bridge config").strip())
         vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
@@ -154,10 +154,10 @@ def ensure_proxy_bridge(upstream: str) -> int:
                 f"setsid -f python3 {shlex.quote(linux_script)} --config {shlex.quote(config_path)} "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
             )
-        start = linux_run(start_cmd, timeout=10, root_user=root_user)
+        start = linux_run(start_cmd, timeout=30, root_user=root_user)
         if start.returncode != 0:
             raise RuntimeError((start.stderr or start.stdout or "failed to start proxy bridge").strip())
-        deadline = time.time() + 5
+        deadline = time.time() + 20
         while time.time() < deadline:
             if _bridge_alive(port, root_user=root_user):
                 break
