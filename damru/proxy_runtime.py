@@ -76,16 +76,38 @@ def resolve_ssh_identity_file() -> str | None:
     return None
 
 
-def linux_cmd(script: str, root_user: bool = False) -> list[str]:
+def create_secure_temp_key(original_key_path: str) -> str | None:
+    import tempfile
+    import shutil
+    import getpass
+    try:
+        temp_dir = tempfile.gettempdir()
+        temp_key_path = os.path.join(temp_dir, f"id_rsa_temp_{os.getpid()}_{hash(original_key_path) & 0xffffffff}")
+        if os.path.exists(temp_key_path):
+            try:
+                os.remove(temp_key_path)
+            except Exception:
+                pass
+        shutil.copy2(original_key_path, temp_key_path)
+        username = os.environ.get("USERNAME")
+        if not username or username.endswith("$"):
+            username = "SYSTEM"
+        subprocess.run(["icacls", temp_key_path, "/inheritance:r"], capture_output=True, text=True)
+        subprocess.run(["icacls", temp_key_path, "/grant:r", f"{username}:(F)"], capture_output=True, text=True)
+        return temp_key_path
+    except Exception:
+        return None
+
+
+def linux_cmd(script: str, root_user: bool = False, ssh_key_path: str = None) -> list[str]:
     vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
     if vm_ssh_host:
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
         inner = f"printf %s {encoded} | base64 -d | bash"
         wrapped = f"sudo bash -lc {shlex.quote(inner)}" if root_user else f"bash -lc {shlex.quote(inner)}"
         cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
-        key_path = resolve_ssh_identity_file()
-        if key_path:
-            cmd.extend(["-i", key_path])
+        if ssh_key_path:
+            cmd.extend(["-i", ssh_key_path])
         cmd.extend([f"administrator@{vm_ssh_host}", wrapped])
         return cmd
 
@@ -101,13 +123,24 @@ def linux_cmd(script: str, root_user: bool = False) -> list[str]:
 
 
 def linux_run(script: str, timeout: int = 30, root_user: bool = False) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        linux_cmd(script, root_user=root_user),
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        errors="replace",
-    )
+    key_path = resolve_ssh_identity_file()
+    temp_key = None
+    if key_path and is_windows():
+        temp_key = create_secure_temp_key(key_path)
+    try:
+        return subprocess.run(
+            linux_cmd(script, root_user=root_user, ssh_key_path=temp_key or key_path),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            errors="replace",
+        )
+    finally:
+        if temp_key and os.path.exists(temp_key):
+            try:
+                os.remove(temp_key)
+            except Exception:
+                pass
 
 
 def proxy_bridge_upstream(proxy: str | None, http_proxy: str | None = None) -> str | None:
