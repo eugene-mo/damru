@@ -101,12 +101,15 @@ def proxy_bridge_upstream(proxy: str | None, http_proxy: str | None = None) -> s
 
 
 def _bridge_alive(port: int, *, root_user: bool) -> bool:
-    probe = linux_run(
-        f"timeout 1 bash -c '</dev/tcp/127.0.0.1/{port}' >/dev/null 2>&1",
-        timeout=5,
-        root_user=root_user,
-    )
-    return probe.returncode == 0
+    try:
+        probe = linux_run(
+            f"timeout 2 bash -c '</dev/tcp/127.0.0.1/{port}' >/dev/null 2>&1",
+            timeout=8,
+            root_user=root_user,
+        )
+        return probe.returncode == 0
+    except Exception:
+        return False
 
 
 def android_proxy_host_from_route(route_text: str) -> str:
