@@ -232,7 +232,6 @@ class ChromeManager:
             activities = [
                 "com.google.android.apps.chrome.Main",
                 "org.chromium.chrome.browser.ChromeTabbedActivity",
-                "org.chromium.chrome.browser.ChromeTabbedActivity2",
             ]
         last_error = ""
         launched = False
