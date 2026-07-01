@@ -58,13 +58,36 @@ def to_wsl_path(value: str) -> str:
     return value
 
 
+def resolve_ssh_identity_file() -> str | None:
+    try:
+        from pathlib import Path
+        local_key = Path.home() / ".ssh" / "id_rsa"
+        if local_key.is_file():
+            return str(local_key)
+    except Exception:
+        pass
+    try:
+        from pathlib import Path
+        admin_key = Path("C:/Users/Administrator/.ssh/id_rsa")
+        if admin_key.is_file():
+            return str(admin_key)
+    except Exception:
+        pass
+    return None
+
+
 def linux_cmd(script: str, root_user: bool = False) -> list[str]:
     vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
     if vm_ssh_host:
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
         inner = f"printf %s {encoded} | base64 -d | bash"
         wrapped = f"sudo bash -lc {shlex.quote(inner)}" if root_user else f"bash -lc {shlex.quote(inner)}"
-        return ["ssh", "-o", "StrictHostKeyChecking=no", f"administrator@{vm_ssh_host}", wrapped]
+        cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+        key_path = resolve_ssh_identity_file()
+        if key_path:
+            cmd.extend(["-i", key_path])
+        cmd.extend([f"administrator@{vm_ssh_host}", wrapped])
+        return cmd
 
     if is_windows():
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
