@@ -82,7 +82,10 @@ class ChromeManager:
                 # Package manager not ready yet â€” wait and retry
                 logger.debug("Package manager not ready (attempt %d/%d), waiting %.0fsâ€¦", attempt + 1, retries, delay)
                 await sleep(delay)
-        raise ChromeError("No Chrome browser found on device. Install Chrome first.")
+        logger.warning("Chrome package manager detection timed out. Falling back to default com.android.chrome package.")
+        self.package = "com.android.chrome"
+        self._package_detected = True
+        return "com.android.chrome"
 
     def _is_webview_shell(self) -> bool:
         return self.package in WEBVIEW_SHELL_PACKAGES
