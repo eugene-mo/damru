@@ -59,6 +59,13 @@ def to_wsl_path(value: str) -> str:
 
 
 def linux_cmd(script: str, root_user: bool = False) -> list[str]:
+    vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
+    if vm_ssh_host:
+        encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
+        inner = f"printf %s {encoded} | base64 -d | bash"
+        wrapped = f"sudo bash -lc {shlex.quote(inner)}" if root_user else f"bash -lc {shlex.quote(inner)}"
+        return ["ssh", "-o", "StrictHostKeyChecking=no", f"administrator@{vm_ssh_host}", wrapped]
+
     if is_windows():
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
         wrapped = f"printf %s {encoded} | base64 -d | bash"
@@ -133,11 +140,25 @@ def ensure_proxy_bridge(upstream: str) -> int:
         write = linux_run(write_cmd, timeout=10, root_user=root_user)
         if write.returncode != 0:
             raise RuntimeError((write.stderr or write.stdout or "failed to write proxy bridge config").strip())
-        start_cmd = (
-            f"setsid -f python3 {shlex.quote(linux_script)} --config {shlex.quote(config_path)} "
-            f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
-        )
-        if is_windows():
+        vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
+        if vm_ssh_host:
+            start_cmd = (
+                f"setsid -f /home/administrator/env/bin/python3 -m damru.proxy_bridge --config {shlex.quote(config_path)} "
+                f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
+            )
+            wrapped_start = f"sudo {start_cmd}" if root_user else start_cmd
+            start = subprocess.run(
+                ["ssh", "-o", "StrictHostKeyChecking=no", f"administrator@{vm_ssh_host}", wrapped_start],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                errors="replace",
+            )
+        elif is_windows():
+            start_cmd = (
+                f"setsid -f python3 {shlex.quote(linux_script)} --config {shlex.quote(config_path)} "
+                f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
+            )
             start = subprocess.run(
                 ["wsl", "-d", configured_wsl_distro(), "-u", "root", "--", "bash", "-lc", start_cmd],
                 capture_output=True,
@@ -146,6 +167,10 @@ def ensure_proxy_bridge(upstream: str) -> int:
                 errors="replace",
             )
         else:
+            start_cmd = (
+                f"setsid -f python3 {shlex.quote(linux_script)} --config {shlex.quote(config_path)} "
+                f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
+            )
             start = linux_run(start_cmd, timeout=10, root_user=root_user)
         if start.returncode != 0:
             raise RuntimeError((start.stderr or start.stdout or "failed to start proxy bridge").strip())
