@@ -316,7 +316,10 @@ class ChromeManager:
             if out.count("found") >= 3:
                 pm = await self.adb.shell(f"pm path {self.package} | head -1", timeout=8, allow_failure=True)
                 if "base.apk" in pm:
-                    return
+                    # Ensure package manager has scanned the app and the launchable activity is resolvable
+                    resolved = await self.adb.shell(f"cmd package resolve-activity --brief {self.package}", timeout=8, allow_failure=True)
+                    if "No activity found" not in resolved and self.package in resolved:
+                        return
             await sleep(2.0)
         logger.warning(
             "Android services not fully ready before browser launch: %s",
