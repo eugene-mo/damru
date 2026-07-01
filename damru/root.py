@@ -2530,6 +2530,12 @@ echo damru_app_data_dirs_created=$created
             )
 
         if result.returncode != 0:
+            # Fallback to precompiled .so from repo's native directory
+            source_so_path = os.path.join(repo_native_dir, "libfakemem_x86_64.so")
+            if os.path.isfile(source_so_path):
+                logger.info("Compilation failed; falling back to precompiled libfakemem_x86_64.so")
+                shutil.copy2(source_so_path, so_path)
+                return so_path
             raise RootError(f"Failed to compile libfakemem.so:\n{result.stderr}")
 
         if not os.path.isfile(so_path):
