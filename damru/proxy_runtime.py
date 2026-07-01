@@ -124,15 +124,20 @@ def proxy_bridge_upstream(proxy: str | None, http_proxy: str | None = None) -> s
 
 
 def _bridge_alive(port: int, *, root_user: bool) -> bool:
-    try:
-        probe = linux_run(
-            f"timeout 2 bash -c '</dev/tcp/127.0.0.1/{port}' >/dev/null 2>&1",
-            timeout=15,
-            root_user=root_user,
-        )
-        return probe.returncode == 0
-    except Exception:
-        return False
+    import socket
+    vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
+    if vm_ssh_host:
+        try:
+            with socket.create_connection((vm_ssh_host, port), timeout=1.0):
+                return True
+        except Exception:
+            return False
+    else:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1.0):
+                return True
+        except Exception:
+            return False
 
 
 def android_proxy_host_from_route(route_text: str) -> str:
