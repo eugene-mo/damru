@@ -600,6 +600,8 @@ class AsyncDamru:
             logger.info('Cold start forced: memory spoof active for deviceMemory=%.0f GB', target_device.device_memory)
         await _gpu_then_battery()
         await _wait_adb_ready("GPU/battery setup", timeout=90.0)
+        if battery_dumpsys_enabled:
+            await self._root.apply_battery_spoof(quiet=True)
         for prep_attempt in range(2):
             try:
                 await _chrome_prep()
