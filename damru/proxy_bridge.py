@@ -67,16 +67,29 @@ def _inject_proxy_auth(headers: bytes, auth_header: str | None) -> bytes:
 
 def _relay(left: socket.socket, right: socket.socket) -> None:
     sockets = [left, right]
-    while True:
+    closed = set()
+    while len(closed) < 2:
         readable, _, _ = select.select(sockets, [], [], 300)
         if not readable:
             return
         for src in readable:
             dst = right if src is left else left
-            data = src.recv(65536)
-            if not data:
+            try:
+                data = src.recv(65536)
+                if not data:
+                    try:
+                        dst.shutdown(socket.SHUT_WR)
+                    except OSError:
+                        pass
+                    if src in sockets:
+                        sockets.remove(src)
+                    closed.add(src)
+                    if len(closed) == 2:
+                        return
+                    continue
+                dst.sendall(data)
+            except OSError:
                 return
-            dst.sendall(data)
 
 
 def _socks5_connect(upstream: Upstream, target_host: str, target_port: int) -> socket.socket:
