@@ -2207,8 +2207,11 @@ echo damru_app_data_dirs_created=$created
         await self.adb.shell_root(f"rm -f {_GPU_BINARY_MARKER}")
         await self.adb.shell("su 0 mount -o remount,ro /vendor 2>/dev/null", allow_failure=True)
         await self.adb.shell("su 0 sync", allow_failure=True)
-        await self.adb.shell_root("setprop ctl.restart surfaceflinger", allow_failure=True)
-        await sleep(5.0)
+        try:
+            await self.adb.shell_root("setprop ctl.restart surfaceflinger")
+            await sleep(5.0)
+        except Exception as exc:
+            logger.warning("SurfaceFlinger restart after GPU binary restore failed: %s", exc)
         logger.info("GPU binary spoof removed (original vulkan.pastel.so restored)")
 
     async def _binary_patch_so(
