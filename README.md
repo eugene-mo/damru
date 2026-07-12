@@ -902,7 +902,7 @@ export DAMRU_EXPERIMENTAL_SENSOR_HAL=1   # Linux/WSL
 
 | Flag | What it does |
 |------|-------------|
-| DAMRU_EXPERIMENTAL_WORKER_CORE_CDP=1 | Enable CDP worker-target auto-attach for multi-threaded JS. May destabilise Chrome. |
+| DAMRU_EXPERIMENTAL_WORKER_CORE_CDP=1 | Opt in to CDP worker-target auto-attach for multi-threaded JS. May destabilise Android Chrome. |
 | DAMRU_EXPERIMENTAL_RAW_WORKER_CDP=1 | Skip reattach flow, keep raw CDP attached. Auto-set by --mode cdp. |
 
 ### Profile tiers
