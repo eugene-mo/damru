@@ -567,8 +567,16 @@ class AsyncDamru:
                         if "uid=" in out:
                             root_out = await self._adb.shell_root("id", timeout=6)
                             if "uid=0" in root_out:
-                                return
-                            last = root_out.strip()
+                                boot_completed = await self._adb.shell("getprop sys.boot_completed", timeout=5, allow_failure=True)
+                                if boot_completed.strip() == "1":
+                                    pm_check = await self._adb.shell(f"pm list packages {self._chrome.package}", timeout=8, allow_failure=True)
+                                    if self._chrome.package in pm_check:
+                                        return
+                                    last = f"PM not ready: {pm_check.strip()}"
+                                else:
+                                    last = f"boot_completed={boot_completed.strip()}"
+                            else:
+                                last = root_out.strip()
                         else:
                             last = out.strip()
                         if not self._serial:
