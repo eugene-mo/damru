@@ -570,9 +570,10 @@ class AsyncDamru:
                                 boot_completed = await self._adb.shell("getprop sys.boot_completed", timeout=5, allow_failure=True)
                                 if boot_completed.strip() == "1":
                                     pm_check = await self._adb.shell(f"pm list packages {self._chrome.package}", timeout=8, allow_failure=True)
-                                    if self._chrome.package in pm_check:
+                                    act_check = await self._adb.shell("service check activity", timeout=5, allow_failure=True)
+                                    if self._chrome.package in pm_check and "Service activity: found" in act_check:
                                         return
-                                    last = f"PM not ready: {pm_check.strip()}"
+                                    last = f"PM/Activity not ready: pm={pm_check.strip()}, act={act_check.strip()}"
                                 else:
                                     last = f"boot_completed={boot_completed.strip()}"
                             else:
