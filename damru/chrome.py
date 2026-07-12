@@ -485,7 +485,9 @@ class ChromeManager:
         """
         pkg = self.package
         await self.adb.shell_root(
-            f"rm -rf /data/data/{pkg}/* /data/user_de/0/{pkg}/* /data/media/0/Android/data/{pkg}/* 2>/dev/null || true"
+            f"rm -rf /data/data/{pkg}/app_chrome /data/data/{pkg}/cache /data/data/{pkg}/databases /data/data/{pkg}/shared_prefs "
+            f"/data/user_de/0/{pkg}/app_chrome /data/user_de/0/{pkg}/cache "
+            f"/data/media/0/Android/data/{pkg} 2>/dev/null || true"
         )
         await sleep(0.5)
         logger.info("Chrome data wiped via rm -rf (%s)", pkg)
