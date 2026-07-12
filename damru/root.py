@@ -1411,22 +1411,20 @@ echo damru_app_data_dirs_created=$created
         # Reset battery stats first to clear stale history that can produce
         # negative dischargingTime values after manual dumpsys overrides.
         await self.adb.shell("dumpsys batterystats --reset", allow_failure=True)
-
         source = "none"
         charging = False
         cmds = [
-            "dumpsys battery unplug -f",
-            "dumpsys battery set -f present 1",
             f"dumpsys battery set -f level {level}",
+            "dumpsys battery set -f present 1",
+            f"dumpsys battery set -f temp {temp}",
+            f"dumpsys battery set -f counter {charge_counter}",
             "dumpsys battery set -f status 3",
             "dumpsys battery set -f ac 0",
             "dumpsys battery set -f usb 0",
             "dumpsys battery set -f wireless 0",
-            f"dumpsys battery set -f temp {temp}",
-            f"dumpsys battery set -f counter {charge_counter}",
+            "dumpsys battery unplug -f",
         ]
-        for cmd in cmds:
-            await self.adb.shell(cmd, allow_failure=True)
+        await self.adb.shell(" && ".join(cmds), allow_failure=True)
 
         log = logger.debug if quiet else logger.info
         log(
