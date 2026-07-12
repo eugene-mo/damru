@@ -362,11 +362,6 @@ class ChromeManager:
                 await sleep(2.0)
                 continue
 
-            # Check if we're past FRE (main browser UI visible)
-            if "compositor_view_holder" in xml and "fre_pager" not in xml:
-                logger.info("FRE complete â€” main browser UI detected (attempt %d)", attempt + 1)
-                return True
-
             # Try each FRE button in priority order
             tapped = False
             for btn_id in _FRE_BUTTONS:
@@ -434,6 +429,12 @@ class ChromeManager:
                         break
                 if tapped:
                     continue
+
+            # Check if we're past FRE only after dismissible prompts are gone.
+            # Chrome can show the main UI behind the notifications prompt.
+            if "compositor_view_holder" in xml and "fre_pager" not in xml:
+                logger.info("FRE complete â€” main browser UI detected (attempt %d)", attempt + 1)
+                return True
 
             # FRE pager visible but buttons not rendered yet (spinner loading)
             if "fre_pager" in xml or "fre_native_and_policy_load_progress_spinner" in xml:
