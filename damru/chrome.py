@@ -480,15 +480,15 @@ class ChromeManager:
     async def clear_all_data(self) -> None:
         """Wipe ALL Chrome data for a truly fresh instance.
 
-        Uses `pm clear` which removes everything: cookies, sessions,
-        localStorage, IndexedDB, cache, permissions, preferences.
-        Chrome will behave as if freshly installed.
-
-        Must be called AFTER force_stop() and BEFORE patch_preferences()/launch().
+        Uses rm -rf under root instead of pm clear to prevent system_server soft
+        reboots under heavy concurrent disk I/O on VM hosts.
         """
-        await self.adb.shell(f"pm clear {self.package}", allow_failure=True)
+        pkg = self.package
+        await self.adb.shell_root(
+            f"rm -rf /data/data/{pkg}/* /data/user_de/0/{pkg}/* /data/media/0/Android/data/{pkg}/* 2>/dev/null || true"
+        )
         await sleep(0.5)
-        logger.info("Chrome data wiped (pm clear %s)", self.package)
+        logger.info("Chrome data wiped via rm -rf (%s)", pkg)
 
     async def targeted_cleanup(self) -> None:
         """Clean session data but preserve Preferences, TTS state, and FRE flag.
