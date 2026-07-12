@@ -602,6 +602,7 @@ class AsyncDamru:
         await _wait_adb_ready("GPU/battery setup", timeout=90.0)
         if battery_dumpsys_enabled:
             await self._root.apply_battery_spoof(quiet=True)
+        await sleep(3.0)
         for prep_attempt in range(2):
             try:
                 await _chrome_prep()
