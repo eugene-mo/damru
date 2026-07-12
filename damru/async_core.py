@@ -1010,8 +1010,18 @@ class AsyncDamru:
             return
 
         page = None
+        close_page = False
         try:
-            page = await self._context.new_page()
+            for candidate in self._context.pages:
+                try:
+                    if not candidate.is_closed():
+                        page = candidate
+                        break
+                except Exception:
+                    continue
+            if page is None:
+                page = await self._context.new_page()
+                close_page = True
             data = None
             # ip-api.com first: MaxMind-derived timezone aligns with the IP→tz
             # lookup detectors use, minimizing "VPN timezone mismatch" flags.
@@ -1068,7 +1078,7 @@ class AsyncDamru:
             self._sync_timezone = self._profile.timezone
             logger.warning("Browser proxy GeoIP sync failed: %s", exc)
         finally:
-            if page:
+            if close_page and page:
                 with contextlib.suppress(Exception):
                     await page.close()
 
