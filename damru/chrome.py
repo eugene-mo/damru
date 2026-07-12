@@ -432,8 +432,8 @@ class ChromeManager:
 
             # Check if we're past FRE only after dismissible prompts are gone.
             # Chrome can show the main UI behind the notifications prompt.
-            if "compositor_view_holder" in xml and "fre_pager" not in xml:
-                logger.info("FRE complete â€” main browser UI detected (attempt %d)", attempt + 1)
+            if "compositor_view_holder" in xml and "fre_pager" not in xml and not any(btn in xml for btn in _FRE_BUTTONS):
+                logger.info("FRE complete — main browser UI detected (attempt %d)", attempt + 1)
                 return True
 
             # FRE pager visible but buttons not rendered yet (spinner loading)
