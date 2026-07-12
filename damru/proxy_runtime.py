@@ -105,7 +105,17 @@ def linux_cmd(script: str, root_user: bool = False, ssh_key_path: str = None) ->
         encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
         inner = f"printf %s {encoded} | base64 -d | bash"
         wrapped = f"sudo bash -lc {shlex.quote(inner)}" if root_user else f"bash -lc {shlex.quote(inner)}"
-        cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+        ssh = "ssh"
+        if is_windows() and Path("C:/Program Files/Git/usr/bin/ssh.exe").is_file():
+            ssh = "C:/Program Files/Git/usr/bin/ssh.exe"
+        cmd = [
+            ssh,
+            "-T",
+            "-n",
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=8",
+            "-o", "StrictHostKeyChecking=no",
+        ]
         if ssh_key_path:
             cmd.extend(["-i", ssh_key_path])
         cmd.extend([f"administrator@{vm_ssh_host}", wrapped])
@@ -209,7 +219,10 @@ def ensure_proxy_bridge(upstream: str) -> int:
         vm_ssh_host = os.environ.get("DAMRU_VM_SSH_HOST")
         if vm_ssh_host:
             start_cmd = (
-                f"setsid -f /home/administrator/env/bin/python3 -m damru.proxy_bridge --config {shlex.quote(config_path)} "
+                f"PY=/home/administrator/damru-env/bin/python; "
+                f"[ -x \"$PY\" ] || PY=/home/administrator/env/bin/python3; "
+                f"[ -x \"$PY\" ] || PY=$(command -v python3); "
+                f"setsid -f \"$PY\" -m damru.proxy_bridge --config {shlex.quote(config_path)} "
                 f"> {shlex.quote(log_path)} 2>&1 < /dev/null"
             )
         else:
@@ -226,7 +239,9 @@ def ensure_proxy_bridge(upstream: str) -> int:
                 break
             time.sleep(1.5 if vm_ssh_host else 0.25)
         else:
-            raise RuntimeError("proxy bridge did not become ready")
+            log = linux_run(f"tail -80 {shlex.quote(log_path)} 2>/dev/null || true", timeout=10, root_user=root_user)
+            detail = (log.stdout or log.stderr or "").strip()
+            raise RuntimeError(f"proxy bridge did not become ready{': ' + detail if detail else ''}")
     return port
 
 

@@ -1116,7 +1116,16 @@ class AsyncDamru:
         original_new_page = self._context.new_page
 
         async def _new_page_stable(*args, **kwargs):
-            page = await original_new_page(*args, **kwargs)
+            page = None
+            for candidate in getattr(self._context, "pages", []) or []:
+                try:
+                    if not candidate.is_closed():
+                        page = candidate
+                        break
+                except Exception:
+                    continue
+            if page is None:
+                page = await original_new_page(*args, **kwargs)
             try:
                 await page.goto("about:blank", wait_until="load", timeout=5000)
                 touch_points = getattr(self, "_touch_points", None)
