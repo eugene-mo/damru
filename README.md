@@ -902,6 +902,7 @@ export DAMRU_EXPERIMENTAL_SENSOR_HAL=1   # Linux/WSL
 
 | Flag | What it does |
 |------|-------------|
+| DAMRU_ENABLE_BINARY_GPU_SPOOF=1 | Opt in to Redroid `vulkan.pastel.so` binary GPU patching. Disabled by default because it can crash Android Chrome on heavy pages. |
 | DAMRU_EXPERIMENTAL_WORKER_CORE_CDP=1 | Opt in to CDP worker-target auto-attach for multi-threaded JS. May destabilise Android Chrome. |
 | DAMRU_EXPERIMENTAL_RAW_WORKER_CDP=1 | Skip reattach flow, keep raw CDP attached. Auto-set by --mode cdp. |
 

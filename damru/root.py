@@ -2187,6 +2187,30 @@ echo damru_app_data_dirs_created=$created
         else:
             logger.warning("GPU binary spoof: no patches applied")
 
+    async def remove_gpu_binary_spoof(self) -> None:
+        """Restore original Redroid Vulkan SwiftShader binary if Damru patched it."""
+        vulkan_so = "/vendor/lib64/hw/vulkan.pastel.so"
+        backup = "/data/local/tmp/damru_vk_pastel_orig.so"
+        has_backup = "OK" in await self.adb.shell(
+            f"test -f {backup} && echo OK", timeout=5, allow_failure=True,
+        )
+        has_marker = bool(await self._read_gpu_binary_marker())
+        if not has_backup and not has_marker:
+            return
+        if not has_backup:
+            logger.warning("GPU binary spoof marker present but original backup is missing")
+            return
+
+        await self.adb.shell("su 0 mount -o remount,rw /vendor 2>/dev/null", allow_failure=True)
+        await self.adb.shell_root(f"cp {backup} {vulkan_so}")
+        await self.adb.shell_root(f"chmod 644 {vulkan_so}")
+        await self.adb.shell_root(f"rm -f {_GPU_BINARY_MARKER}")
+        await self.adb.shell("su 0 mount -o remount,ro /vendor 2>/dev/null", allow_failure=True)
+        await self.adb.shell("su 0 sync", allow_failure=True)
+        await self.adb.shell_root("setprop ctl.restart surfaceflinger", allow_failure=True)
+        await sleep(5.0)
+        logger.info("GPU binary spoof removed (original vulkan.pastel.so restored)")
+
     async def _binary_patch_so(
         self,
         so_path: str,

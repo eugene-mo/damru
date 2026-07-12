@@ -497,8 +497,12 @@ class AsyncDamru:
                     except Exception as e2:
                         logger.warning("Binary GPU spoof fallback failed: %s (continuing)", e2)
             else:
-                logger.info("No renderer.config - using binary SwiftShader .so patch")
-                await self._root.apply_gpu_binary_spoof(target_device)
+                if os.environ.get("DAMRU_ENABLE_BINARY_GPU_SPOOF") == "1":
+                    logger.info("No renderer.config - using binary SwiftShader .so patch")
+                    await self._root.apply_gpu_binary_spoof(target_device)
+                else:
+                    logger.info("No renderer.config - binary GPU spoof disabled for Redroid stability")
+                    await self._root.remove_gpu_binary_spoof()
             if battery_dumpsys_enabled:
                 # Battery dumpsys must follow GPU spoof because SurfaceFlinger restart resets BatteryService.
                 await self._root.apply_battery_spoof()
