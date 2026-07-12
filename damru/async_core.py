@@ -944,7 +944,10 @@ class AsyncDamru:
                     pass
             logger.debug("Closed %d stale tabs", len(pages) - 1)
 
-        await self._sync_geo_from_browser_proxy()
+        if os.environ.get("DAMRU_BROWSER_PROXY_GEO_SYNC") == "1":
+            await self._sync_geo_from_browser_proxy()
+        elif self._profile:
+            self._sync_timezone = self._profile.timezone
 
         # #==============================================================#
         # |  PHASE 5: CDP overrides + TTS warmup - PARALLEL BATCH      |
