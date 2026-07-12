@@ -24,6 +24,11 @@ class ADB:
     """Wrapper around the `adb` CLI binary."""
 
     def __init__(self, serial: Optional[str] = None):
+        if serial:
+            import re
+            m = re.match(r"^\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\](:\d+)$", serial)
+            if m:
+                serial = m.group(1) + m.group(2)
         self.serial = serial
 
     @staticmethod
@@ -72,6 +77,12 @@ class ADB:
         """Build an adb command, routing explicit wsl: serials through WSL."""
         serial = self.serial
         routed_args = list(args)
+
+        import re
+        for i, arg in enumerate(routed_args):
+            m = re.match(r"^\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\](:\d+)$", str(arg))
+            if m:
+                routed_args[i] = m.group(1) + m.group(2)
 
         # ADB()._run(["connect", "wsl:IP:PORT"]) is used by pool cleanup and
         # reconnect paths. Route those through WSL even though self.serial is None.
