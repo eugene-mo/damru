@@ -520,12 +520,23 @@ class AsyncDamru:
                 f"AppleWebKit/537.36 (KHTML, like Gecko) "
                 f"Chrome/{version or '145.0.0.0'} Mobile Safari/537.36"
             )
-            await asyncio.gather(
-                self._chrome.write_command_line(
-                    self._profile.chrome_flags,
-                    user_agent=native_user_agent,
-                ),
-                self._chrome.patch_preferences(self._profile.locale, accept_lang),
+            await self._chrome.write_command_line(
+                self._profile.chrome_flags,
+                user_agent=native_user_agent,
+            )
+            await self._chrome.patch_preferences(self._profile.locale, accept_lang)
+
+        def _is_adb_transport_error(exc: Exception) -> bool:
+            if not isinstance(exc, ADBError):
+                return False
+            msg = str(exc).lower()
+            return (
+                "device offline" in msg
+                or "device not found" in msg
+                or "not found" in msg
+                or "error: closed" in msg
+                or "no devices/emulators found" in msg
+                or "first_error(rc=255)" in msg
             )
 
         async def _memory_spoof():
@@ -580,7 +591,16 @@ class AsyncDamru:
             logger.info('Cold start forced: memory spoof active for deviceMemory=%.0f GB', target_device.device_memory)
         await _gpu_then_battery()
         await _wait_adb_ready("GPU/battery setup", timeout=90.0)
-        await _chrome_prep()
+        for prep_attempt in range(2):
+            try:
+                await _chrome_prep()
+                break
+            except Exception as exc:
+                if prep_attempt == 0 and _is_adb_transport_error(exc):
+                    logger.warning("Chrome prep lost ADB transport; reconnecting and retrying once: %s", exc)
+                    await _wait_adb_ready("Chrome prep retry", timeout=60.0)
+                    continue
+                raise
 
         # Chrome launch with retry - SurfaceFlinger restart kills processes
         # and the system needs variable time to re-register activities.
